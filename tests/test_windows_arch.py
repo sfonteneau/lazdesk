@@ -99,7 +99,7 @@ class Targets(unittest.TestCase):
 
     def test_fpc_missing_target_is_explained(self):
         with patch.object(b, 'run', side_effect=b.BuildError('ppcrossx64 absent')):
-            with self.assertRaisesRegex(b.BuildError, 'Installer le compilateur'):
+            with self.assertRaisesRegex(b.BuildError, 'Install the compiler'):
                 b.check_fpc_target('fpc.exe', 'x86_64', 'win64')
 
     def test_c_targets_accept_both(self):
@@ -155,7 +155,7 @@ class Targets(unittest.TestCase):
                 self.assertEqual(b.select_c_tool('gcc',None,None,cpu='i386'),wanted)
 
     def test_incomplete_sdk_does_not_fallback_to_path(self):
-        with tempfile.TemporaryDirectory() as tmp, self.assertRaisesRegex(b.BuildError, 'toolchain MinGW complete'):
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaisesRegex(b.BuildError, 'complete MinGW toolchain'):
             b.select_c_tool('nm',None,Path(tmp),cpu='i386')
 
     def test_dxgi_sdk_library_dirs_forwarded_to_fpc_and_lazarus(self):

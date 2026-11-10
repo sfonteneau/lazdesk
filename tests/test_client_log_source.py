@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Controles lexicaux limites pour le logger GUI (pas une compilation FPC)."""
+"""Limited lexical checks for the GUI logger (not an FPC compilation)."""
 from pathlib import Path
 import re
 import xml.etree.ElementTree as ET
@@ -19,4 +19,4 @@ assert 'Stream.Free' in logger
 assert 'UTF8String' in logger
 assert '<IsPartOfProject Value="True" />' in (client/'LazDeskClient.lpi').read_text()
 ET.parse(client/'LazDeskClient.lpi')
-print('OK : journal GUI, 0 WriteLn dans le client, projet XML valide')
+print('OK: GUI log, no WriteLn in the client, valid project XML')

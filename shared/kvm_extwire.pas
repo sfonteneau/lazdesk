@@ -85,9 +85,9 @@ begin
   case Reason of
     1: Result:='Session active'; 2: Result:='Session verrouillee';
     3: Result:='Session inactive/deconnectee';
-    4: Result:='Session changee : redemarrer le serveur dans la session voulue';
-    5: Result:='Capture indisponible';
-    else Result:='Etat de session inconnu (partage suspendu)';
+    4: Result:='Session changed: restart the server in the intended session';
+    5: Result:='Capture unavailable';
+    else Result:='Unknown session state (sharing suspended)';
   end;
 end;
 function MakeTextRequest(Serial: Cardinal; const Utf8: RawByteString): RawByteString;

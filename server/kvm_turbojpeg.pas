@@ -82,7 +82,7 @@ begin
     if FLibrary <> NilHandle then Break;
   end;
   if FLibrary = NilHandle then
-    raise ETurboJpeg.Create('TurboJPEG introuvable : installer libturbojpeg ' +
+    raise ETurboJpeg.Create('TurboJPEG not found: install libturbojpeg ' +
       '(libturbojpeg0 sous Linux, turbojpeg.dll sous Windows, ' +
       'libturbojpeg.dylib sous macOS).');
 
@@ -94,7 +94,7 @@ begin
   {$ENDIF}
   if (not Assigned(FInit)) or (not Assigned(FDestroy)) or
      (not Assigned(FBufferSize)) or (not Assigned(FCompress)) then
-    raise ETurboJpeg.Create('API TurboJPEG incomplete (tjCompress2 requis).');
+    raise ETurboJpeg.Create('Incomplete TurboJPEG API (tjCompress2 required).');
   FHandle := FInit();
   if FHandle = nil then
     raise ETurboJpeg.Create('tjInitCompress a echoue.');
@@ -113,7 +113,7 @@ function TTurboJpegEncoder.ErrorMessage: string;
 var
   P: PAnsiChar;
 begin
-  Result := 'erreur TurboJPEG';
+  Result := 'TurboJPEG error';
   if not Assigned(FGetError) then Exit;
   P := FGetError(FHandle);
   if P <> nil then Result := string(P);

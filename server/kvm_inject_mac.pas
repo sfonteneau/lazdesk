@@ -28,8 +28,8 @@ begin
   Reason := '';
   Result := AXIsProcessTrusted;
   if not Result then
-    Reason := 'Autoriser LazDeskServer dans macOS > Confidentialite et ' +
-      'securite > Accessibilite pour injecter clavier et souris.';
+    Reason := 'Allow LazDeskServer in macOS > Privacy & ' +
+      'Security > Accessibility to enable keyboard and mouse input.';
 end;
 
 function MapMacKey(VK: Word): Integer;
@@ -149,7 +149,7 @@ end;
 
 procedure PostEvent(E: Pointer);
 begin
-  if E=nil then raise Exception.Create('Creation CGEvent impossible');
+  if E=nil then raise Exception.Create('Failed to create CGEvent');
   try
     if not AXIsProcessTrusted then raise Exception.Create('Permission Accessibilite retiree');
     CGEventPost(HID_EVENT_TAP, E);
@@ -183,19 +183,19 @@ var
   EventType, CGButton: Cardinal;
   Position: TCGPoint; X, Y: Integer; M: TKvmMonitor; E: Pointer;
 begin
-  if not AXIsProcessTrusted then raise Exception.Create('Permission Accessibilite requise');
+  if not AXIsProcessTrusted then raise Exception.Create('Accessibility permission required');
   M := CaptureMonitor;
   if not DenormalizePoint(M.Bounds, NX, NY, X, Y) then
   begin
-    if Action <> 2 then raise Exception.Create('Geometrie du moniteur indisponible');
+    if Action <> 2 then raise Exception.Create('Monitor geometry unavailable');
     // A display may disappear while a button is held: still send its release.
-    E := CGEventCreate(nil); if E=nil then raise Exception.Create('Creation CGEvent souris impossible');
+    E := CGEventCreate(nil); if E=nil then raise Exception.Create('Failed to create mouse CGEvent');
     try Position := CGEventGetLocation(E); finally CFRelease(E); end;
   end
   else begin Position.X := X; Position.Y := Y; end;
-  if not QuartzMouseEvent(MouseState, Action, Button, EventType, CGButton) then raise Exception.Create('Commande souris invalide');
+  if not QuartzMouseEvent(MouseState, Action, Button, EventType, CGButton) then raise Exception.Create('Invalid mouse command');
   E := CGEventCreateMouseEvent(nil, EventType, Position, CGButton);
-  if E=nil then raise Exception.Create('Creation CGEvent souris impossible');
+  if E=nil then raise Exception.Create('Failed to create mouse CGEvent');
   CGEventSetFlags(E, ModifierFlags);
   if Action = 1 then
   begin
@@ -216,7 +216,7 @@ var
   Count: NativeUInt;
   E: Pointer;
 begin
-  if not AXIsProcessTrusted then raise Exception.Create('Permission Accessibilite requise');
+  if not AXIsProcessTrusted then raise Exception.Create('Accessibility permission required');
   if (CodePoint < 32) or (CodePoint > $10ffff) then Exit;
   if CodePoint <= $ffff then
   begin
@@ -231,14 +231,14 @@ begin
     Count := 2;
   end;
   E := CGEventCreateKeyboardEvent(nil, 0, True);
-  if E=nil then raise Exception.Create('Creation evenement texte impossible');
+  if E=nil then raise Exception.Create('Failed to create text event');
   begin
     CGEventSetFlags(E, 0);
     CGEventKeyboardSetUnicodeString(E, Count, @CodeUnits[0]);
     PostEvent(E);
   end;
   E := CGEventCreateKeyboardEvent(nil, 0, False);
-  if E=nil then raise Exception.Create('Creation evenement texte impossible');
+  if E=nil then raise Exception.Create('Failed to create text event');
   begin
     CGEventSetFlags(E, 0);
     CGEventKeyboardSetUnicodeString(E, Count, @CodeUnits[0]);
@@ -251,13 +251,13 @@ var
   MacKey: Integer;
   E: Pointer;
 begin
-  if not AXIsProcessTrusted then raise Exception.Create('Permission Accessibilite requise');
-  if (VKey=0) or (VKey>255) then raise Exception.Create('Code touche invalide');
+  if not AXIsProcessTrusted then raise Exception.Create('Accessibility permission required');
+  if (VKey=0) or (VKey>255) then raise Exception.Create('Invalid key code');
   if not Pressed and not ModifierKeys[VKey] then Exit; // an unmapped down was never posted
   MacKey:=MapMacKey(VKey);
-  if MacKey<0 then raise Exception.Create('Touche non mappee sous macOS');
+  if MacKey<0 then raise Exception.Create('Key not mapped on macOS');
   E:=CGEventCreateKeyboardEvent(nil,Word(MacKey),Pressed);
-  if E=nil then raise Exception.Create('Creation CGEvent clavier impossible');
+  if E=nil then raise Exception.Create('Failed to create keyboard CGEvent');
   if (VKey=$14) and Pressed and not ModifierKeys[VKey] then CapsOn:=not CapsOn;
   ModifierKeys[VKey]:=Pressed;
   CGEventSetFlags(E, ModifierFlags);
@@ -266,7 +266,7 @@ end;
 
 procedure InjectWheel(Notches: SmallInt);
 begin
-  if not AXIsProcessTrusted then raise Exception.Create('Permission Accessibilite requise');
+  if not AXIsProcessTrusted then raise Exception.Create('Accessibility permission required');
   if Notches = 0 then Exit;
   // kCGScrollEventUnitLine=1, wheelCount=1.
   PostEvent(CGEventCreateScrollWheelEvent(nil, 1, 1, Notches));

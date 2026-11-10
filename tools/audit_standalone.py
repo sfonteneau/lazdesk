@@ -28,11 +28,11 @@ WIN_SYSTEM = {'kernel32.dll','kernelbase.dll','user32.dll','gdi32.dll','gdi32ful
 
 def invoke(argv: list[str]) -> str:
     if not shutil.which(argv[0]):
-        raise RuntimeError('Outil absent: '+argv[0])
+        raise RuntimeError('Tool not found: '+argv[0])
     env=os.environ.copy(); env["LC_ALL"]="C"
     p=subprocess.run(argv,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,env=env)
     if p.returncode:
-        raise RuntimeError('Inspection impossible: '+p.stdout)
+        raise RuntimeError('Inspection failed: '+p.stdout)
     return p.stdout
 
 def inspect(path: Path, objdump: str = 'objdump') -> tuple[str,list[str],str]:
@@ -46,7 +46,7 @@ def inspect(path: Path, objdump: str = 'objdump') -> tuple[str,list[str],str]:
     if head in [b'\xcf\xfa\xed\xfe',b'\xfe\xed\xfa\xcf',b'\xca\xfe\xba\xbe',b'\xbe\xba\xfe\xca']:
         data=invoke(['otool','-L',str(path)])
         return 'Mach-O',[line.strip().split(' (',1)[0] for line in data.splitlines()[1:] if ' (compatibility ' in line],data
-    raise RuntimeError('Format executable non reconnu: '+str(path))
+    raise RuntimeError('Unrecognized executable format: '+str(path))
 
 def violations(kind: str, deps: list[str]) -> list[str]:
     bad=[]
@@ -56,14 +56,14 @@ def violations(kind: str, deps: list[str]) -> list[str]:
         elif kind=='PE':
             name=dependency.lower()
             if name not in WIN_SYSTEM and not name.startswith(('api-ms-win-','ext-ms-win-')):
-                bad.append(dependency+' (DLL hors liste systeme)')
+                bad.append(dependency+' (DLL not on the system allowlist)')
     return bad
 
 def invalid_imports(kind: str, details: str) -> list[str]:
     # Read-only safety check: a system DLL may be present but an imported
     # symbol can still be absent. Never modify upstream sources here.
     if kind == 'PE' and re.search(r'(?<![A-Za-z0-9_])MsiEnumProductA(?![A-Za-z0-9_])', details):
-        return ['MsiEnumProductA : entree MSI inexistante (mettre a jour les dependances et recompiler)']
+        return ['MsiEnumProductA: obsolete MSI import (update dependencies and rebuild)']
     return []
 
 
@@ -72,28 +72,28 @@ def main() -> int:
     p.add_argument('binary',type=Path)
     p.add_argument('--report',type=Path)
     p.add_argument('--objdump', default='objdump', help='Explicit MinGW/LLVM objdump path for PE files')
-    p.add_argument('--verbose', action='store_true', help='Afficher aussi la sortie complete de objdump/readelf/otool')
+    p.add_argument('--verbose', action='store_true', help='Also display the full objdump/readelf/otool output')
     args=p.parse_args()
     kind,deps,data=inspect(args.binary,args.objdump)
     bad=violations(kind,deps)+invalid_imports(kind,data)
     lines=['Executable: '+str(args.binary),'Format: '+kind,
-      'Dependances directes:']+['  '+d for d in dict.fromkeys(deps)]
-    lines+=['RESULTAT: '+('ECHEC: '+', '.join(bad) if bad else 'aucune dependance directe privee LazDesk/TurboJPEG detectee'),
-      'Limite: ne couvre ni dlopen/LoadLibrary, ni plugins du bureau/GPU, ni toutes les dependances transitives.',
-      'Les profils autonomes compilent les chargeurs de modules LazDesk hors du binaire.',
-      'Linux: verifier aussi les paquets systeme sur la machine cible. macOS: les dylibs non Apple restent externes.']
+      'Direct dependencies:']+['  '+d for d in dict.fromkeys(deps)]
+    lines+=['RESULT: '+('FAILURE: '+', '.join(bad) if bad else 'no private LazDesk/TurboJPEG direct dependencies detected'),
+      'Limitations: does not cover dlopen/LoadLibrary, desktop/GPU plugins, or all transitive dependencies.',
+      'Standalone profiles exclude LazDesk module loaders from the executable.',
+      'Linux: also verify installed system packages on the target machine. macOS: non-Apple dylibs remain external.']
     summary='\n'.join(lines)
     print(summary)
-    # Un objdump -p complet peut depasser plusieurs centaines de Ko :
-    # ne pas noyer le terminal, garder la trace brute seulement sur demande.
+    # A complete objdump -p can exceed several hundred KiB:
+    # avoid flooding the terminal; keep the raw trace only when requested.
     if args.verbose:
-        print('\n--- inspection native detaillee ---\n'+data)
+        print('\n--- detailed native inspection ---\n'+data)
     if args.report:
         args.report.parent.mkdir(parents=True,exist_ok=True)
-        args.report.write_text(summary+'\n\n--- inspection native detaillee ---\n'+data,encoding='utf-8')
+        args.report.write_text(summary+'\n\n--- detailed native inspection ---\n'+data,encoding='utf-8')
     return int(bool(bad))
 
 if __name__=='__main__':
     try: sys.exit(main())
     except (OSError,RuntimeError) as exc:
-        print('ERREUR: '+str(exc),file=sys.stderr); sys.exit(2)
+        print('ERROR: '+str(exc),file=sys.stderr); sys.exit(2)

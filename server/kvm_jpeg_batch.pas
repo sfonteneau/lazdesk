@@ -124,7 +124,7 @@ begin
             FPackets^[I]) then
           begin
             FSuccess := False;
-            FError := 'Rectangle JPEG invalide';
+            FError := 'Invalid JPEG rectangle';
             Break;
           end;
           Inc(I, FStep);
@@ -200,7 +200,7 @@ begin
     except
       on E: Exception do
       begin
-        WriteLn('[jpeg] Encodage auxiliaire indisponible : ', E.Message);
+        WriteLn('[jpeg] Background encoder unavailable: ', E.Message);
         WorkerCount := Length(FWorkers);
       end;
     end;
@@ -247,7 +247,7 @@ begin
     // Preserve video availability when an auxiliary handle is unavailable:
     // fall back to the old sequential path for this frame and future frames.
     FMaxThreads := 1;
-    WriteLn('[jpeg] Repli en encodage sequentiel.');
+    WriteLn('[jpeg] Falling back to sequential encoding.');
     for I := 0 to N - 1 do
       if not EncodeOne(FMain, Frame, Regions[I], Quality, Packets[I]) then
         Exit(False);

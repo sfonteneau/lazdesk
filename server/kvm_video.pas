@@ -61,7 +61,7 @@ begin
     except on E: Exception do
       begin
         if FHardwareName<>'auto' then raise;
-        WriteLn('[codec] Repli TurboJPEG : ',E.Message);
+        WriteLn('[codec] Falling back to TurboJPEG: ',E.Message);
         FUseH264:=False; FreeAndNil(FH264);
         FQuality:=-1; FGeometryDirty:=True; Width:=0; Height:=0;
         SetLength(Cache,0); SetLength(Versions,0); SetLength(Groups,0);
@@ -181,7 +181,7 @@ begin
       FH264:=TKvmH264Encoder.Create(FHardwareName,FDevice,W,H,FFPS,FBitrate)
     else
     begin
-      LastError:='Aucun encodeur materiel disponible';
+      LastError:='No hardware encoder available';
       for I:=0 to High(Candidates) do
       begin
         try
@@ -200,7 +200,7 @@ begin
   if Changed then
   begin
     if not FH264.Encode(Current,Data,Reason) then raise Exception.Create(Reason);
-    Packet:=MakeVideo(W,H,Data); if Packet='' then raise Exception.Create('Paquet H.264 hors limite');
+    Packet:=MakeVideo(W,H,Data); if Packet='' then raise Exception.Create('H.264 packet exceeds limits');
     Cache[0]:=Packet; Versions[0]:=NextSerial(Versions[0]);
     CopyFrameReuse(Current,FPrevious);
   end;

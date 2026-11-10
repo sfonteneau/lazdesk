@@ -20,6 +20,6 @@ assert "if Packet[1]='U'" not in helper
 assert 'function TKvmServer.RejectText' in server
 assert "Result:=MakeInputReceipt(Serial,KVM_INPUT_FAILED,0);" in server
 assert "Receipt:=RejectText(ID,Serial,Frame.payload);" in server
-assert "premier_octet=" in server
+assert "first_byte=" in server
 assert "BadPacket(Sender); Exit;" in server  # still used for non-X malformed packets
 print('PASS: server decodes X bytes directly and malformed X receives a failure receipt')

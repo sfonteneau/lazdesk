@@ -64,7 +64,7 @@ def register_lazarus_package_link(lazbuild: str, package: Path) -> None:
 def tool(name: str) -> str:
     p = shutil.which(name)
     if not p:
-        raise BuildError(f'Outil absent: {name}. Installer les outils de compilation, pas seulement les runtimes.')
+        raise BuildError(f'Tool not found: {name}. Install the build tools, not just the runtimes.')
     return str(Path(p).absolute())
 
 def host_target(arch: str = 'native') -> tuple[str, str]:
@@ -75,7 +75,7 @@ def host_target(arch: str = 'native') -> tuple[str, str]:
     Non-Windows builds remain native to avoid changing their SDK policy.
     """
     if arch not in ('native', 'x86', 'x64'):
-        raise BuildError('Architecture inconnue: ' + arch)
+        raise BuildError('Unknown architecture: ' + arch)
     system = platform.system()
     machine = platform.machine().lower()
     if system == 'Windows':
@@ -87,13 +87,13 @@ def host_target(arch: str = 'native') -> tuple[str, str]:
     cpu = {'x86':'i386', 'x64':'x86_64'}.get(arch, host_cpu)
     if system == 'Windows':
         if host_cpu not in ('i386', 'x86_64') or cpu not in ('i386', 'x86_64'):
-            raise BuildError('Windows: seules les cibles --arch x86 et --arch x64 sont gerees.')
+            raise BuildError('Windows: only --arch x86 and --arch x64 targets are supported.')
         if host_cpu == 'i386' and cpu == 'x86_64':
-            raise BuildError('Les sondes x64 exigent un Windows 64 bits; aucun test natif ne sera saute.')
+            raise BuildError('x64 probes require 64-bit Windows; no native test will be skipped.')
         return cpu, 'win32' if cpu == 'i386' else 'win64'
     os_name = {'Linux':'linux', 'Darwin':'darwin'}.get(system)
     if not os_name or host_cpu not in ('x86_64', 'aarch64') or cpu != host_cpu:
-        raise BuildError('Linux/macOS: compilation native x86_64/aarch64 uniquement. --arch x86 vise Windows.')
+        raise BuildError('Linux/macOS: native x86_64/aarch64 builds only. --arch x86 is for Windows.')
     return cpu, os_name
 
 
@@ -112,12 +112,12 @@ def check_fpc_target(fpc: str, cpu: str, os_name: str) -> None:
         fo = run([fpc, *flags, '-iTO'], capture=True).splitlines()[-1].strip()
     except (BuildError, IndexError) as exc:
         raise BuildError(
-            f'FPC ne peut pas cibler {cpu}-{os_name}. --arch ne fournit pas les compilateurs. '
-            'Installer le compilateur et les unites de cette cible, ou choisir son fpc.exe '
-            'avec --fpc. Detail: ' + str(exc)) from exc
+            f'FPC cannot target {cpu}-{os_name}. --arch does not install compilers. '
+            'Install the compiler and units for this target, or select the appropriate fpc.exe '
+            'with --fpc. Details: ' + str(exc)) from exc
     if (fc, fo) != (cpu, os_name):
-        raise BuildError(f'FPC annonce {fc}-{fo}, cible demandee {cpu}-{os_name}. '
-                         'Choisir le bon --fpc; aucun changement silencieux de cible.')
+        raise BuildError(f'FPC reports {fc}-{fo}; requested target is {cpu}-{os_name}. '
+                         'Select the correct --fpc; the target will not change silently.')
 
 
 def compiler_prefix(cc: str) -> str:
@@ -134,7 +134,7 @@ def select_c_tool(name: str, explicit: str | None, bin_dir: Path | None,
     directory = bin_dir.resolve() if bin_dir else (Path(cc).parent if cc else None)
     if directory:
         if not directory.is_dir():
-            raise BuildError('Dossier de toolchain introuvable: ' + str(directory))
+            raise BuildError('Toolchain directory not found: ' + str(directory))
         prefix = compiler_prefix(cc) if cc else (
             'i686-w64-mingw32-' if cpu == 'i386' else 'x86_64-w64-mingw32-')
         for candidate in dict.fromkeys([prefix + name, name]):
@@ -144,7 +144,7 @@ def select_c_tool(name: str, explicit: str | None, bin_dir: Path | None,
                     return tool(str(path))
         # For an explicit --toolchain-bin, never quietly fall back to PATH.
         if bin_dir:
-            raise BuildError(f'{name} introuvable dans {directory}. Choisir une toolchain MinGW complete.')
+            raise BuildError(f'{name} not found in {directory}. Select a complete MinGW toolchain.')
     if name == 'gcc' and cpu in ('i386', 'x86_64'):
         prefixed = ('i686' if cpu == 'i386' else 'x86_64') + '-w64-mingw32-gcc'
         if shutil.which(prefixed):
@@ -164,9 +164,9 @@ def check_windows_linker(ld: str, cpu: str) -> None:
     expected = {'i386': 'pei-i386', 'x86_64': 'pei-x86-64'}[cpu]
     if fmt != expected:
         raise BuildError(
-            f'Linker incompatible avec {cpu}-Windows: {ld} '
-            f'annonce {fmt or "un format inconnu"}, attendu {expected}. '
-            'Choisir un --toolchain-bin de la bonne architecture.')
+            f'Linker incompatible with {cpu}-Windows: {ld} '
+            f'reports {fmt or "an unknown format"}; expected {expected}. '
+            'Choose a --toolchain-bin for the correct architecture.')
 
 
 def windows_linker_flags(cc: str, ld: str) -> list[str]:
@@ -178,7 +178,7 @@ def windows_linker_flags(cc: str, ld: str) -> list[str]:
     elif ld_stem == 'ld':
         chosen_prefix = ''
     else:
-        raise BuildError('Nom de linker non pris en charge par FPC: ' + ld)
+        raise BuildError('Linker name not supported by FPC: ' + ld)
     # -XP without an argument resets a cross prefix from fpc.cfg.
     # -FD points at the selected MinGW directory, not Strawberry/PATH.
     return ['-Xe', '-FD' + str(Path(ld).parent), '-XP' + chosen_prefix]
@@ -208,10 +208,10 @@ def windows_sdk_library_directories(cc: str) -> list[str]:
             dirs.append(directory)
     if missing:
         raise BuildError(
-            'SDK MinGW incomplet ou bibliotheques Windows introuvables via ' + cc + ': ' +
-            ', '.join(missing) + '. Installer les archives d import Win32/DirectX ' +
-            'de la meme architecture (--arch x86 => mingw32; x64 => mingw64). ' +
-            'Ne pas substituer les archives x64 aux archives x86.')
+            'Incomplete MinGW SDK or Windows libraries not found via ' + cc + ': ' +
+            ', '.join(missing) + '. Install the Win32/DirectX import archives ' +
+            'for the same architecture (--arch x86 => mingw32; x64 => mingw64). ' +
+            'Do not substitute x64 archives for x86 archives.')
     return dirs
 
 
@@ -221,7 +221,7 @@ def option_text(options: list[str]) -> str:
     result = []
     for option in options:
         if any(c in option for c in ('"', '\n', '\r')):
-            raise BuildError('Option non representable dans le projet Lazarus: ' + repr(option))
+            raise BuildError('Option cannot be represented in the Lazarus project: ' + repr(option))
         result.append('"' + option + '"' if any(c.isspace() for c in option) else option)
     return ' '.join(result)
 
@@ -241,17 +241,17 @@ def check_pe_target(path: Path, cpu: str) -> None:
     with path.open('rb') as f:
         head = f.read(64)
         if len(head) != 64 or head[:2] != b'MZ':
-            raise BuildError('Executable PE invalide: ' + str(path))
+            raise BuildError('Invalid PE executable: ' + str(path))
         offset = struct.unpack_from('<I', head, 60)[0]
         if offset < 64 or offset > path.stat().st_size - 6:
-            raise BuildError('Entete PE hors limites: ' + str(path))
+            raise BuildError('PE header out of bounds: ' + str(path))
         f.seek(offset)
         pe = f.read(6)
     if pe[:4] != b'PE\x00\x00':
-        raise BuildError('Signature PE invalide: ' + str(path))
+        raise BuildError('Invalid PE signature: ' + str(path))
     actual = struct.unpack_from('<H', pe, 4)[0]
     if actual != expected:
-        raise BuildError(f'{path}: PE machine 0x{actual:04x}, attendu {cpu} (0x{expected:04x})')
+        raise BuildError(f'{path}: PE machine 0x{actual:04x}, expected {cpu} (0x{expected:04x})')
 
 
 def check_windows_archive(path: Path, objdump: str, cpu: str) -> None:
@@ -260,8 +260,8 @@ def check_windows_archive(path: Path, objdump: str, cpu: str) -> None:
     allowed = {'i386':{'pe-i386', 'pe-bigobj-i386'},
                'x86_64':{'pe-x86-64', 'pe-bigobj-x86-64'}}[cpu]
     if not formats or any(fmt not in allowed for fmt in formats):
-        raise BuildError(f'{path}: objets {sorted(set(formats))}, attendu {cpu} Windows. '
-                         'Fournir/recompiler libturbojpeg.a pour la cible choisie.')
+        raise BuildError(f'{path}: object formats {sorted(set(formats))}, expected {cpu} Windows. '
+                         'Provide or rebuild libturbojpeg.a for the selected target.')
 
 
 def audit_binary(path: Path, cpu: str, os_name: str, objdump: str | None = None,
@@ -292,16 +292,16 @@ def symbols(nm: str, path: Path) -> str:
 
 def assert_archive(path: Path, nm: str, names: list[str]) -> None:
     if not path.is_file():
-        raise BuildError(f'Archive statique introuvable: {path}')
+        raise BuildError(f'Static archive not found: {path}')
     with path.open('rb') as f:
         if f.read(8) != b'!<arch>\n':
-            raise BuildError(f'{path}: archive ar complete requise (.a), pas DLL/.so ni archive thin.')
+            raise BuildError(f'{path}: a complete ar archive (.a) is required, not a DLL/.so or thin archive.')
     table = symbols(nm, path)
     for name in names:
         if not re.search(r'\b[Tt]\s+_?' + re.escape(name) + r'\s*$', table, re.M):
-            raise BuildError(f'{path}: definition de {name} absente (mauvais SDK ou bibliotheque d import).')
+            raise BuildError(f'{path}: missing definition of {name} (wrong SDK or import library).')
     if any(re.search(r'\b_?__imp_' + re.escape(name) + r'\s*$', table, re.M) for name in names):
-        raise BuildError(f'{path}: archive d import DLL, pas une implementation statique.')
+        raise BuildError(f'{path}: DLL import archive, not a static implementation.')
 
 def system_links(tokens: list[str], *, extra: list[str] | None = None) -> tuple[str, list[str]]:
     """Only accept an explicit, small pkg-config grammar; never silently drop flags."""
@@ -322,10 +322,10 @@ def system_links(tokens: list[str], *, extra: list[str] | None = None) -> tuple[
             i += 1
             name = tokens[i]
             if not re.fullmatch(r'[A-Za-z0-9_]+', name):
-                raise BuildError('Nom framework invalide')
+                raise BuildError('Invalid framework name')
             directives.append('{$LINKFRAMEWORK ' + name + '}')
         else:
-            raise BuildError(f'Option pkg-config non prise en charge: {arg!r}. Ne pas l ignorer; adapter le fichier de liaison pour ce SDK.')
+            raise BuildError(f'Unsupported pkg-config option: {arg!r}. Do not ignore it; adapt the linker configuration for this SDK.')
         i += 1
     return '\n'.join(dict.fromkeys(directives)) + '\n', list(dict.fromkeys(search))
 
@@ -341,11 +341,11 @@ def check_c_target(cc: str, cpu: str, os_name: str) -> None:
              ('darwin' in triple or 'apple' in triple) if os_name == 'darwin' else
              'linux' in triple)
     if not arch_ok or not os_ok:
-        raise BuildError(f'Cible C incompatible: {cc} annonce {triple}, demande {cpu}-{os_name}. '
-                         'Choisir --toolchain-bin (ou --cc) pour cette architecture. '
-                         'Aucun -m32/-m64 implicite et aucun choix Strawberry automatique force.')
+        raise BuildError(f'Incompatible C target: {cc} reports {triple}; requested {cpu}-{os_name}. '
+                         'Choose --toolchain-bin (or --cc) for this architecture. '
+                         'No implicit -m32/-m64 and no forced automatic Strawberry selection.')
     if is_windows(os_name) and 'mingw' not in triple:
-        raise BuildError('Windows statique: utiliser MinGW-w64 (meme architecture/CRT), pas MSVC/clang-cl.')
+        raise BuildError('Static Windows: use MinGW-w64 (matching architecture/CRT), not MSVC/clang-cl.')
 
 def make_projects(target: str, search: list[str], os_name: str,
                   *, fpc: str | None = None, linker_flags: list[str] | None = None) -> list[Path]:
@@ -397,7 +397,7 @@ def stage_runtime(cc: str, stage: Path, library: str, output_name: str,
     if not path.is_file():
         if optional:
             return None
-        raise BuildError(f'Runtime statique manquant: {name} ({cc})')
+        raise BuildError(f'Missing static runtime: {name} ({cc})')
     destination = stage / ('lib' + output_name + '.a')
     shutil.copy2(path, destination)
     return output_name
@@ -416,44 +416,44 @@ def merge_crt_archives(ar: str, path: Path, archives: list[Path]) -> None:
     by the FPC RTL (sysinitpas.o).
     """
     if not archives:
-        raise BuildError('Aucune archive CRT a regrouper')
+        raise BuildError('No CRT archives to merge')
     path.parent.mkdir(parents=True, exist_ok=True)
     path.unlink(missing_ok=True)  # discard stale text GROUP() from prior builds
     entries = []
     for archive in archives:
         if archive.parent.resolve() != path.parent.resolve():
-            raise BuildError('Archive CRT hors du dossier de staging: ' + str(archive))
+            raise BuildError('CRT archive is outside the staging directory: ' + str(archive))
         if not archive.is_file():
-            raise BuildError('Archive ar statique manquante: ' + str(archive))
+            raise BuildError('Static ar archive missing: ' + str(archive))
         with archive.open('rb') as fp:
             magic = fp.read(8)
         if magic != b'!<arch>\n':
-            raise BuildError('Archive ar statique invalide: ' + str(archive))
+            raise BuildError('Invalid static ar archive: ' + str(archive))
         if not re.fullmatch(r'lib[A-Za-z0-9_+-]+\.a', archive.name):
-            raise BuildError('Nom de bibliotheque non pris en charge: ' + archive.name)
+            raise BuildError('Unsupported library name: ' + archive.name)
         if archive.name in ('libmingw32.a', 'libkvm_mingw32.a'):
-            raise BuildError('Le startup MinGW provoquerait un conflit TLS avec FPC')
+            raise BuildError('MinGW startup would conflict with FPC TLS initialization')
         entries.append(archive.name)
     if path.name != 'libkvm_wincrt.a':
-        raise BuildError('Nom du groupe CRT inattendu')
+        raise BuildError('Unexpected CRT group name')
     # Use paths relative to cwd: Windows paths may contain spaces or accents.
     # MRI input is sent on stdin, not interpreted by cmd.exe or bash.
     commands = 'CREATE ' + path.name + '\n' + ''.join('ADDLIB ' + name + '\n' for name in entries) + 'SAVE\nEND\n'
     process = subprocess.run([str(ar), '-M'], input=commands, cwd=path.parent,
                              text=True, errors='replace', capture_output=True)
     if process.returncode != 0 or not path.is_file():
-        raise BuildError('Echec de fusion des archives MinGW par GNU ar -M: ' +
+        raise BuildError('Failed to merge MinGW archives using GNU ar -M: ' +
                          (process.stderr or process.stdout or str(process.returncode)))
     with path.open('rb') as fp:
         magic = fp.read(8)
     if magic != b'!<arch>\n':
-        raise BuildError('Le fichier CRT fusionne nest pas une archive ar binaire')
+        raise BuildError('The merged CRT file is not a binary ar archive')
     # Force a current symbol index, checked again when compiling the real FPC
     # test_standalone_link.exe (not just a GCC native probe).
     run([ar, 's', path])
     members = run([ar, 't', path], capture=True)
     if not members.strip():
-        raise BuildError('Archive CRT fusionnee vide')
+        raise BuildError('Merged CRT archive is empty')
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -481,21 +481,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--objdump', default=None, help='PE/archive inspector from the selected MinGW SDK')
     parser.add_argument('--widgetset', default=None)
     parser.add_argument('--mormot-dir', type=Path, default=os.environ.get('MORMOT2_DIR'),
-                        help='Racine EXACTE de mORMot2 (contient packages/lazarus/mormot2.lpk); force le lien package Lazarus')
+                        help='EXACT mORMot2 root (contains packages/lazarus/mormot2.lpk); require the Lazarus package link')
     args = parser.parse_args(argv)
     cpu, os_name = host_target(args.arch)
-    print(f'Cible demandee: {cpu}-{os_name} (--arch {args.arch})', flush=True)
+    print(f'Requested target: {cpu}-{os_name} (--arch {args.arch})', flush=True)
     target = cpu + '-' + os_name
     if args.with_portal and os_name != 'linux':
-        raise BuildError('--with-portal exige Linux')
+        raise BuildError('--with-portal requires Linux')
     if args.with_dxgi and not is_windows(os_name):
-        raise BuildError('--with-dxgi exige Windows x86/x64')
+        raise BuildError('--with-dxgi requires Windows x86/x64')
     if args.with_codec and is_windows(os_name):
-        raise BuildError('Le profil autonome Windows livre est JPEG. FFmpeg Windows statique n est pas automatise: ne pas masquer ses DLL comme des bibliotheques systeme.')
+        raise BuildError('The supplied standalone Windows profile uses JPEG. Static Windows FFmpeg is not automated: do not disguise its DLLs as system libraries.')
     if args.only == 'client' and (args.with_portal or args.with_dxgi):
-        raise BuildError('Portail/DXGI sont des options serveur, pas client')
+        raise BuildError('Portal/DXGI are server options, not client options')
     if args.turbojpeg_archive and args.turbojpeg_source:
-        raise BuildError('Choisir --turbojpeg-archive OU --turbojpeg-source')
+        raise BuildError('Select --turbojpeg-archive OR --turbojpeg-source')
     # An explicit SDK folder overrides ambient CC/AR/etc. Individual CLI
     # switches override the folder. Without a folder, keep environment support.
     def selected(value: str | None, variable: str) -> str | None:
@@ -519,8 +519,8 @@ def main(argv: list[str] | None = None) -> int:
         fpc = tool(fpc_name)
         check_fpc_target(fpc, cpu, os_name)
     if args.check_toolchain:
-        print('FPC, GCC et linker PE annoncent la cible demandee; ar/nm/objdump trouves.')
-        print('Aucun lien executable effectue: RTL/LCL, TurboJPEG et mORMot2 restent a valider au build.')
+        print('FPC, GCC and the PE linker report the requested target; ar/nm/objdump found.')
+        print('No executable linked: RTL/LCL, TurboJPEG and mORMot2 still need build-time validation.')
         return 0
     if not args.prepare_only:
         laz = tool(args.lazbuild)
@@ -532,7 +532,7 @@ def main(argv: list[str] | None = None) -> int:
         mormot_root = args.mormot_dir.resolve()
         mormot_package = mormot_root / 'packages/lazarus/mormot2.lpk'
         if not mormot_package.is_file():
-            raise BuildError('Paquet mORMot2 introuvable: '+str(mormot_package))
+            raise BuildError('mORMot2 package not found: '+str(mormot_package))
     stage = ROOT / 'native/static' / target
     stage.mkdir(parents=True, exist_ok=True)
     # Removing the generated feature include FIRST prevents use of stale
@@ -544,7 +544,7 @@ def main(argv: list[str] | None = None) -> int:
         # directories unless they are propagated into the generated .lpi
         # and the standalone Pascal smoke link (both consume `search`).
         search.extend(windows_sdk_library_directories(cc))
-        print('Bibliotheques DXGI/Win32 MinGW: ' + '; '.join(search), flush=True)
+        print('MinGW DXGI/Win32 libraries: ' + '; '.join(search), flush=True)
     defines: list[str] = []
     cflags = ['-std=c11','-O2','-Wall','-Wextra','-Wno-misleading-indentation']
     if not is_windows(os_name):
@@ -554,7 +554,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.turbojpeg_source:
         source = args.turbojpeg_source.resolve()
         if not (source/'CMakeLists.txt').is_file():
-            raise BuildError('Source libjpeg-turbo incomplete')
+            raise BuildError('Incomplete libjpeg-turbo source')
         cmake = tool('cmake')
         build = stage / 'jpeg-build'
         flags = ['-DENABLE_SHARED=OFF','-DENABLE_STATIC=ON','-DWITH_TURBOJPEG=ON',
@@ -579,7 +579,7 @@ def main(argv: list[str] | None = None) -> int:
         run([cmake,'--build',build,'--config','Release','--target','turbojpeg-static','--parallel',str(min(os.cpu_count() or 2,8))])
         found = list(build.rglob('libturbojpeg.a'))
         if len(found) != 1:
-            raise BuildError(f'libturbojpeg.a attendu, trouves: {found}')
+            raise BuildError(f'Expected libturbojpeg.a, found: {found}')
         jpeg = found[0]
     elif args.turbojpeg_archive:
         jpeg = args.turbojpeg_archive.resolve()
@@ -631,9 +631,9 @@ def main(argv: list[str] | None = None) -> int:
                 # linker can resolve C++ <-> POSIX threads <-> C runtime cycles.
                 crt_archives.append(pthread_archive)
             else:
-                print('NOTE: libwinpthread.a absente de la toolchain. '
-                      'Le modele MinGW win32 n en a normalement pas besoin; '
-                      'la sonde DXGI rejettera toute DLL libwinpthread-1.dll.', flush=True)
+                print('NOTE: libwinpthread.a is missing from the toolchain. '
+                      'The MinGW win32 model usually does not need it; '
+                      'the DXGI probe will reject any libwinpthread-1.dll dependency.', flush=True)
         merge_crt_archives(ar, stage/'libkvm_wincrt.a', crt_archives)
         turbo_links = ['{$LINKLIB kvm_wincrt}']
         # Never add libmingw32.a, and never request -static globally.
@@ -726,8 +726,8 @@ def main(argv: list[str] | None = None) -> int:
               'complete_applications_built':False}
     write(stage/'build-manifest.json',json.dumps(manifest,indent=2)+'\n')
     if args.prepare_only:
-        print('Archives preparees; projets: '+', '.join(str(p) for p in projects))
-        print('Aucune application Pascal compilee avec --prepare-only.')
+        print('Archives prepared; projects: '+', '.join(str(p) for p in projects))
+        print('No Pascal applications built with --prepare-only.')
         return 0
     if not args.skip_smoke:
         units=stage/'test-units'; units.mkdir(exist_ok=True)
@@ -756,7 +756,7 @@ def main(argv: list[str] | None = None) -> int:
         # Make the selected upstream package visible to Lazarus, then rebuild its
         # package explicitly before the applications. `--build-all` alone on
         # the application may use another previously registered mORMot2 PPU.
-        print('mORMot2 utilise: '+str(mormot_package.resolve()), flush=True)
+        print('Using mORMot2: '+str(mormot_package.resolve()), flush=True)
         register_lazarus_package_link(laz, mormot_package)
         run([laz,'--build-all','--compiler='+fpc,'--cpu='+cpu,'--os='+os_name,
              mormot_package])
@@ -770,18 +770,18 @@ def main(argv: list[str] | None = None) -> int:
             widgetset=args.widgetset or ('cocoa' if os_name=='darwin' else None)
             if widgetset: opts+=['--widgetset='+widgetset]
         run([laz,*opts,project])
-        if not exe.is_file(): raise BuildError('Executable non produit: '+str(exe))
+        if not exe.is_file(): raise BuildError('Executable not produced: '+str(exe))
         audit_binary(exe, cpu, os_name, objdump, output/(app+'-dependencies.txt'))
     manifest['complete_applications_built']=True
     manifest['built_roles']=args.only
     write(stage/'build-manifest.json',json.dumps(manifest,indent=2)+'\n')
-    print('\nTermine: executables dans '+str(output))
-    print('Copier seulement le serveur OU le client necessaire; conserver les notices tierces de distribution.')
+    print('\nDone: executables in '+str(output))
+    print('Copy only the required server OR client; retain third-party distribution notices.')
     return 0
 
 if __name__ == '__main__':
     try:
         sys.exit(main())
     except (BuildError, OSError) as exc:
-        print('ERREUR: '+str(exc), file=sys.stderr)
+        print('ERROR: '+str(exc), file=sys.stderr)
         sys.exit(2)

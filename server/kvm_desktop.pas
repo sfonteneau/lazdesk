@@ -48,14 +48,14 @@ begin
      (GetEnvironmentVariable('WAYLAND_DISPLAY') <> '')));
   Result := (Backend = 'auto') or (Backend = 'x11') or (Backend = 'portal');
   if Result and IsPortal and (Options.Monitor <> 0) then
-  begin Result := False; Reason := 'Wayland: utiliser --monitor 0; le moniteur est choisi dans le portail local.'; end;
+  begin Result := False; Reason := 'Wayland: use --monitor 0; select the monitor in the local portal.'; end;
   {$ENDIF}
   {$IFDEF WINDOWS}
   Result := (Backend = 'auto') or (Backend = 'gdi') or (Backend = 'dxgi');
   RequireDxgi := Backend = 'dxgi';
   {$ENDIF}
   {$IFDEF DARWIN}Result := (Backend = 'auto') or (Backend = 'sck');{$ENDIF}
-  if not Result and (Reason = '') then Reason := 'Backend non disponible sur ce systeme';
+  if not Result and (Reason = '') then Reason := 'Backend unavailable on this system';
   if Result and not Options.ListMonitors then
     Result:=ConfigureSessionGuard(Options.SessionPolicy,Reason);
 end;
@@ -69,7 +69,7 @@ end;
 procedure ListDesktopMonitors;
 begin
   {$IFDEF LINUX}
-  if IsPortal then begin WriteLn('0: selection du moniteur dans le portail Wayland au demarrage (consentement local)'); Exit; end;
+  if IsPortal then begin WriteLn('0: choose the monitor in the Wayland portal at startup (local consent required)'); Exit; end;
   {$ENDIF}
   PrintMonitors;
 end;
@@ -88,15 +88,15 @@ begin {$IFDEF LINUX}CloseWayland;{$ENDIF} end;
 function DesktopBackendName: string;
 begin
   {$IFDEF WINDOWS}
-  if RequireDxgi then Result := 'Windows DXGI (bureau virtuel et moniteurs)'
+  if RequireDxgi then Result := 'Windows DXGI (virtual desktop and monitors)'
   else if Backend = 'gdi' then Result := 'Windows GDI'
-  else Result := 'Windows DXGI automatique / repli GDI';
+  else Result := 'Windows automatic DXGI / GDI fallback';
   {$ENDIF}
   {$IFDEF LINUX}
-  if IsPortal then Result := 'Wayland / portail / PipeWire avec consentement local'
-  else Result := 'Linux X11 / MIT-SHM / XTest / curseur XFixes';
+  if IsPortal then Result := 'Wayland / portal / PipeWire with local consent'
+  else Result := 'Linux X11 / MIT-SHM / XTest / XFixes cursor';
   {$ENDIF}
-  {$IFDEF DARWIN}Result := 'macOS ScreenCaptureKit / Quartz / curseur natif';{$ENDIF}
+  {$IFDEF DARWIN}Result := 'macOS ScreenCaptureKit / Quartz / native cursor';{$ENDIF}
 end;
 function DesktopBackendReady(AllowControl: Boolean; out Reason: string): Boolean;
 begin
@@ -106,7 +106,7 @@ begin
   if Backend <> 'gdi' then UseDxgi := CheckDxgi(Reason);
   if RequireDxgi and not UseDxgi then Exit(False);
   Reason := ''; Result := (GetSystemMetrics(SM_CXSCREEN) > 0) and (GetSystemMetrics(SM_CYSCREEN) > 0);
-  if not Result then Reason := 'Lancer dans une session Windows graphique interactive';
+  if not Result then Reason := 'Run in an interactive Windows desktop session';
   {$ENDIF}
   {$IFDEF LINUX}
   if IsPortal then Exit(OpenWayland(AllowControl,NativeCaptureFPS(RequestedFPS),Reason));

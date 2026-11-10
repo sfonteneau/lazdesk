@@ -29,7 +29,7 @@ class MultiMonitorTests(unittest.TestCase):
         self.assertNotIn('if M.NativeID = 0 then Exit;', PASCAL)
         self.assertIn('LastCaptureCursorEmbedded := Result and DxgiCursorEmbedded;', DESKTOP)
         self.assertIn('Result:=kvm_inject_win.GetCursorState(NX,NY,Shape)', DESKTOP)
-        self.assertNotIn('DXGI: choisir --monitor N', DESKTOP)
+        self.assertNotIn('DXGI: select --monitor N', DESKTOP)
 
     def test_compose_real_native_header(self):
         cc = shutil.which('c++') or shutil.which('g++')

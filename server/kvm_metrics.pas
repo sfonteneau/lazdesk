@@ -27,7 +27,7 @@ begin
   if FileName<>'' then
   begin
     // Never overwrite an existing measurement accidentally.
-    if FileExists(FileName) then raise Exception.Create('Le fichier metriques existe deja: '+FileName);
+    if FileExists(FileName) then raise Exception.Create('Metrics file already exists: '+FileName);
     FStream:=TFileStream.Create(FileName,fmCreate);
     WriteLine('elapsed_ms,capture_calls,captures,capture_ms,pipeline_calls,pipeline_ms,queued_batches,queued_bytes,queue_rejects,acks,ack_total_ms,security_rejects');
   end;
@@ -70,7 +70,7 @@ begin
     except
       on E: Exception do
       begin
-        WriteLn('[metrics] Ecriture impossible, mesures desactivees : ',E.Message);
+        WriteLn('[metrics] Write failed, metrics disabled: ',E.Message);
         FreeAndNil(FStream);
       end;
     end;

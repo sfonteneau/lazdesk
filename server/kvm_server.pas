@@ -603,7 +603,7 @@ begin
     begin
       State.Keys[K] := False;
       try
-        if not DesktopSessionAvailable then raise Exception.Create('Session suspendue');
+        if not DesktopSessionAvailable then raise Exception.Create('Session suspended');
         InjectKey(False, K); FPendingKeyRelease[K] := False;
       except on E: Exception do
         begin FPendingKeyRelease[K] := True; WriteLn('[input] Liberation touche differee: ', E.Message); end;
@@ -614,7 +614,7 @@ begin
     begin
       State.Buttons[B] := False;
       try
-        if not DesktopSessionAvailable then raise Exception.Create('Session suspendue');
+        if not DesktopSessionAvailable then raise Exception.Create('Session suspended');
         InjectMouse(2, B, State.MouseX, State.MouseY); FPendingButtonRelease[B] := False;
       except on E: Exception do
         begin
@@ -687,7 +687,7 @@ begin
          (NowTick-FClients[I].LastSeen>KVM_CLIENT_TIMEOUT_MS) or
          FlowTimedOut(FClients[I].Flow, NowTick) then
       begin
-        WriteLn('[client] Session expiree ou sans ACK : ', FClients[I].ID);
+        WriteLn('[client] Session expired or ACK missing: ', FClients[I].ID);
         SetLength(ExpiredIDs, N + 1);
         ExpiredIDs[N] := FClients[I].ID;
         Inc(N);
@@ -814,7 +814,7 @@ begin
             CancelPreparedFlowBatch(FClients[Index].Flow,Batch.Serial,Batch.SendScreen);
         finally LeaveCriticalSection(FLock); end;
         if QueueResult=kqrInvalid then
-          WriteLn('[video] Lot local invalide avant queue pour client ',ClientID);
+          WriteLn('[video] Invalid local batch before queueing for client ',ClientID);
         Break;
       end;
       // Loop immediately: if the current cached frame needs more than one
@@ -849,7 +849,7 @@ begin
     end;
   finally LeaveCriticalSection(FLock); end;
   if Counted then
-    WriteLn('[video] NACK client ',ID,' lot ',Serial,
+    WriteLn('[video] NACK from client ',ID,' lot ',Serial,
       ' rejets consecutifs=',Rejects,' fermeture=',Close);
   if Close then FSocket.AbortConnection(ID);
   WakeVideoWorkers;
@@ -961,7 +961,7 @@ begin
       Close:=BadFrames>=3;
     end;
   finally LeaveCriticalSection(FLock); end;
-  WriteLn('[ws] Trame invalide, client ',Sender.Protocol.ConnectionID,
+  WriteLn('[ws] Invalid frame from client ',Sender.Protocol.ConnectionID,
     ' erreurs=',BadFrames,' fermeture=',Close);
   if Close then FSocket.AbortConnection(Sender.Protocol.ConnectionID);
 end;
@@ -993,7 +993,7 @@ end;
 procedure TKvmServer.ProtocolClosed(Protocol: TWebSocketProtocol);
 begin
   // Called for both normal and abnormal closure; no misleading attribution.
-  WriteLn('[ws] Connexion terminee : ',Protocol.ConnectionID);
+  WriteLn('[ws] Connection closed: ',Protocol.ConnectionID);
   RemoveClient(Protocol.ConnectionID);
 end;
 
@@ -1009,7 +1009,7 @@ begin
     if (FController = 0) or (FController = ID) then
     begin
       FController := ID;
-      WriteLn('[controle] Accorde a : ', ID);
+      WriteLn('[control] Granted to: ', ID);
       Result := True;
     end;
   finally
@@ -1030,7 +1030,7 @@ begin
     if not KeepOwner then
     begin
       FController := 0;
-      WriteLn('[controle] Libere par : ', ID);
+      WriteLn('[control] Released by: ', ID);
     end;
   finally
     LeaveCriticalSection(FLock);
@@ -1154,7 +1154,7 @@ begin
           for P:=0 to High(Points) do
           begin
             if (GetTickCount64-Started>500) or not DesktopSessionAvailable then
-              raise Exception.Create('Saisie suspendue ou budget temps depasse');
+              raise Exception.Create('Input suspended or time limit exceeded');
             InjectText(Points[P]); Inc(Applied);
           end;
         finally
@@ -1177,7 +1177,7 @@ begin
           // An OS call can fail after partial injection; counts refer only
           // to fully submitted Unicode scalars, not verified application text.
           if Applied>0 then Status:=KVM_INPUT_PARTIAL else Status:=KVM_INPUT_FAILED;
-          WriteLn('[input] Commit interrompu (contenu non journalise)');
+          WriteLn('[input] Commit interrupted (content not logged)');
         end;
       end;
     end;
@@ -1333,7 +1333,7 @@ begin
     begin
       if (Length(Frame.payload)>272) or (Copy(Frame.payload,1,5)<>'AUTH ') then
       begin
-        WriteLn('[auth] Requete invalide du client ',ID,' (longueur=',Length(Frame.payload),')');
+        WriteLn('[auth] Invalid request from client ',ID,' (longueur=',Length(Frame.payload),')');
         BadPacket(Sender); Exit;
       end;
       Token:=Copy(Frame.payload,6,MaxInt); Split:=Pos(' ',Token);
@@ -1350,14 +1350,14 @@ begin
           if ControlRight then SendText(Sender,'OK CTRL') else SendText(Sender,'OK VIEW');
           // Current clients get the full remote monitor geometry.
           SendText(Sender,CaptureMonitorLayoutText);
-          ActivateClient(ID); WriteLn('[client] Authentifie : ',ID,' controle=',ControlRight);
+          ActivateClient(ID); WriteLn('[client] Authenticated: ',ID,' control=',ControlRight);
         end
         else begin FMetrics.SecurityReject; FSocket.AbortConnection(ID); end;
       end
       else
       begin
         FMetrics.SecurityReject;
-        WriteLn('[auth] Refuse client ',ID,' (jeton/capacite non acceptes ; secret non affiche)');
+        WriteLn('[auth] Rejected client ',ID,' (token/capabilities rejected; secret not displayed)');
         FSocket.AbortConnection(ID);
       end;
     end;
@@ -1369,7 +1369,7 @@ begin
          not AcceptPacket(ID,Length(Frame.payload)) then
       begin
         FMetrics.SecurityReject;
-        WriteLn('[ws] Trame refusee (quota, taille ou session) client ',ID,
+        WriteLn('[ws] Frame rejected (quota, size, or session) for client ',ID,
           ' longueur=',Length(Frame.payload));
         FSocket.AbortConnection(ID); Exit;
       end;
@@ -1388,13 +1388,13 @@ begin
         if (Frame.payload[1]='X') and (Length(Frame.payload)>=8) then
         begin
           Serial:=KvmServerGet32LE(Frame.payload,3);
-          Write('[ws] Detail X invalide client ',ID,
+          Write('[ws] Invalid X details from client ',ID,
             ' longueur=',Length(Frame.payload),
             ' version=',Ord(Frame.payload[2]),
             ' serial=',Serial,
             ' declare=',KvmServerGet16LE(Frame.payload,7),
             ' reel=',Length(Frame.payload)-8);
-          if Length(Frame.payload)>=9 then Write(' premier_octet=',Ord(Frame.payload[9]));
+          if Length(Frame.payload)>=9 then Write(' first_byte=',Ord(Frame.payload[9]));
           WriteLn;
           // A malformed Unicode-text request is recoverable input, not a
           // reason to desynchronise the whole KVM session.  Return a receipt
@@ -1412,14 +1412,14 @@ begin
         end
         else
         begin
-          WriteLn('[ws] Detail trame invalide client ',ID,' type=',Ord(Frame.payload[1]),
+          WriteLn('[ws] Invalid frame details from client ',ID,' type=',Ord(Frame.payload[1]),
             ' longueur=',Length(Frame.payload));
           BadPacket(Sender); Exit;
         end;
       end;
       if not TouchClient(ID) then
       begin
-        WriteLn('[ws] Client absent ou non pret : ',ID);
+        WriteLn('[ws] Client missing or not ready: ',ID);
         FSocket.AbortConnection(ID); Exit;
       end;
       try
@@ -1443,7 +1443,7 @@ begin
           end;
         end;
       except on E: Exception do
-        begin WriteLn('[input] Echec de commande (contenu non journalise)'); SendText(Sender,'ERR INPUT'); end;
+        begin WriteLn('[input] Command failed (content not logged)'); SendText(Sender,'ERR INPUT'); end;
       end;
     end;
   end;

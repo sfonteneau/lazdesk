@@ -51,7 +51,7 @@ begin
     Handle:=KvmSessionOpenEx(@NativeError[0],SizeOf(NativeError));
     Result:=Handle<>nil;
     if not Result then Reason:='Garde integre: '+string(PAnsiChar(@NativeError[0]));
-  end else Reason:='ABI garde integre incompatible';
+  end else Reason:='Incompatible built-in session guard ABI';
   {$ELSE}
   Name:=ExtractFilePath(ExpandFileName(ParamStr(0)))+'liblazdesk_session.so';
   Lib:=LoadLibrary(Name);
@@ -71,9 +71,9 @@ begin
   begin
     if Reason='' then
       {$IFDEF KVM_STANDALONE}
-      Reason:='Garde de session integre indisponible: verifier le runtime libsystemd et la session utilisateur.';
+      Reason:='Built-in session guard unavailable: check libsystemd runtime and user session.';
       {$ELSE}
-      Reason:='Garde de session Linux indisponible. Compiler native/session/build.sh (libsystemd runtime requis).';
+      Reason:='Linux session guard unavailable. Run native/session/build.sh (libsystemd runtime required).';
       {$ENDIF}
     if not Strict then begin Result:=True; Reason:=''; end;
   end;

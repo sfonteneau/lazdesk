@@ -36,20 +36,20 @@ class BuildHelpers(unittest.TestCase):
                      'random_vendor.dll']:
             self.assertTrue(a.violations('PE',[name]))
     def test_audit_windows_actual_fpc_imports(self):
-        # Extrait des dependances du test_standalone_link.exe compile dans la VM Windows.
+        # Dependencies extracted from test_standalone_link.exe built in the Windows VM.
         dlls=['KERNEL32.dll','msvcrt.dll','kernel32.dll','user32.dll',
               'ole32.dll','version.dll','mpr.dll']
         self.assertEqual(a.violations('PE',dlls),[])
         self.assertTrue(a.violations('PE',dlls+['libgcc_s_dw2-1.dll']))
         self.assertTrue(a.violations('PE',dlls+['turbojpeg.dll']))
     def test_audit_windows_actual_lazdesk_server_imports(self):
-        # Imports exacts releves sur LazDeskServer.exe x86 par objdump -p.
+        # Exact imports from LazDeskServer.exe x86 as reported by objdump -p.
         dlls=['oleaut32.dll','kernel32.dll','user32.dll','ole32.dll',
               'advapi32.dll','gdi32.dll','version.dll','mpr.dll',
               'wininet.dll','KERNEL32.dll','msvcrt.dll','wtsapi32.dll',
               'crypt32.dll','netapi32.dll','secur32.dll','msi.dll','ws2_32.dll']
         self.assertEqual(a.violations('PE',dlls),[])
-        # Conserver le refus des dependances non-systeme.
+        # Keep rejecting non-system dependencies.
         for private in ('libgcc_s_dw2-1.dll','libwinpthread-1.dll',
                         'turbojpeg.dll','libstdc++-6.dll','kvm_private.dll'):
             self.assertTrue(a.violations('PE',dlls+[private]),private)

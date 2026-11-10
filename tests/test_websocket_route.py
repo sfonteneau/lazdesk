@@ -23,4 +23,4 @@ assert "FInputs.Receipt" in client
 assert "FView.MouseCapture" not in client
 assert "GetCaptureControl" in client and "SetCaptureControl" in client
 assert "LazDesk v9" in client
-print("PASS: routes WS, client v9/auth capabilities, capture souris (controle lexical)")
+print("PASS: WS routes, client v9/auth capabilities, mouse capture (lexical checks)")

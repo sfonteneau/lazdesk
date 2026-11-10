@@ -121,7 +121,7 @@ begin
   begin
     if Index = ParamCount then
     begin
-      ErrorText := 'Argument manquant pour ' + Key;
+      ErrorText := 'Missing argument for ' + Key;
       Exit;
     end;
     Inc(Index);
@@ -131,12 +131,12 @@ begin
     Value := Copy(Arg, Length(Key) + 2, MaxInt)
   else
   begin
-    ErrorText := 'Option inconnue : ' + Arg;
+    ErrorText := 'Unknown option: ' + Arg;
     Exit;
   end;
   if Value = '' then
   begin
-    ErrorText := 'Valeur vide pour ' + Key;
+    ErrorText := 'Empty value for ' + Key;
     Exit;
   end;
   Result := True;
@@ -157,34 +157,34 @@ begin
     '                         h264_amf|h264_vaapi|h264_videotoolbox]' + LineEnding +
     '              [--bitrate-kbps 128..100000] [--gpu-device DEVICE]' + LineEnding +
     '              [--session-policy strict|backend] [--metrics-csv FILE]' + LineEnding +
-    '              [--allow-insecure] (explicite pour ws distant, VPN requis)' + LineEnding +
-    '--fps 0 : cadence libre (limitee par la capture, le CPU et les ACK).' + LineEnding +
-    'Resolution native par defaut, y compris le bureau multi-ecrans.' + LineEnding +
-    '--max-width/--max-height : reduction optionnelle de resolution.' + LineEnding +
-    '--adaptive : autorise la baisse de resolution/qualite si ACK lents.' + LineEnding +
-    'Limite de securite : 32768 pixels par cote, 67 108 864 pixels en tout.' + LineEnding +
-    'Par defaut : --listen 127.0.0.1 --port 7900 --fps 3 --quality 65' + LineEnding +
-    'Token : --token SECRET ou LAZDESK_TOKEN (16+ caracteres).' + LineEnding +
-    '--control + --token : controle. --view-token / LAZDESK_VIEW_TOKEN : vision.' + LineEnding +
-    'Exemple TLS : --listen 0.0.0.0 --port 7900 --tls-cert server.pem --tls-key server.key' + LineEnding +
-    'TLS : --tls-cert avec certificat/cle PEM (ou PFX sur Windows).' + LineEnding +
-    'Sans TLS, ws:// est en clair : utiliser un VPN ou un tunnel SSH.';
+    '              [--allow-insecure] (explicit for remote ws; VPN required)' + LineEnding +
+    '--fps 0: unlimited frame rate (bounded by capture, CPU and ACKs).' + LineEnding +
+    'Native resolution by default, including the multi-monitor desktop.' + LineEnding +
+    '--max-width/--max-height: optional resolution downscaling.' + LineEnding +
+    '--adaptive: allow lower resolution/quality if ACKs are slow.' + LineEnding +
+    'Safety limit: 32768 pixels per side, 67,108,864 pixels total.' + LineEnding +
+    'Default: --listen 127.0.0.1 --port 7900 --fps 3 --quality 65' + LineEnding +
+    'Token: --token SECRET or LAZDESK_TOKEN (16+ characters).' + LineEnding +
+    '--control + --token: control. --view-token / LAZDESK_VIEW_TOKEN: view only.' + LineEnding +
+    'TLS example: --listen 0.0.0.0 --port 7900 --tls-cert server.pem --tls-key server.key' + LineEnding +
+    'TLS: --tls-cert with a PEM certificate/key (or PFX on Windows).' + LineEnding +
+    'Without TLS, ws:// is unencrypted: use a VPN or SSH tunnel.';
 end;
 
 function ClientUsage: string;
 begin
   Result :=
-    'LazDeskClient [--host IP-ou-DNS] [--port PORT] [--token SECRET]' + LineEnding +
-    '              [--tls] [--tls-ca CERTIFICAT-CA-PEM]' + LineEnding +
+    'LazDeskClient [--host IP-or-DNS] [--port PORT] [--token SECRET]' + LineEnding +
+    '              [--tls] [--tls-ca CA-CERTIFICATE-PEM]' + LineEnding +
     '              [--allow-insecure] [--no-h264] [--keyboard text|remote]' + LineEnding +
     '              [--control] [--maximized|--windowed]' + LineEnding +
-    'Par defaut : --host 127.0.0.1 --port 7900 ;' + LineEnding +
-    'token depuis --token ou LAZDESK_TOKEN, ou saisi dans la fenetre.' + LineEnding +
-    'Fenetre 1080x730 par defaut ; --maximized maximise la fenetre normale.' + LineEnding +
-    'Le span multi-ecrans est automatique selon la selection ; plein ecran via F8.' + LineEnding +
-    '--control : demande le controle exclusif apres autorisation serveur et bureau actif.' + LineEnding +
-    'Avec --host, --port ou --token et un token present, le client se connecte' +
-    LineEnding + 'automatiquement ; sinon la fenetre permet la saisie manuelle.';
+    'Default: --host 127.0.0.1 --port 7900;' + LineEnding +
+    'token from --token or LAZDESK_TOKEN, or entered in the window.' + LineEnding +
+    'Default window: 1080x730; --maximized maximizes the normal window.' + LineEnding +
+    'Multi-monitor spanning follows the selection; full screen via F11.' + LineEnding +
+    '--control: request exclusive control after server approval and when desktop is active.' + LineEnding +
+    'With --host, --port, or --token and a nonempty token, the client connects' +
+    LineEnding + 'automatically; otherwise, the window allows manual input.';
 end;
 
 function ParseServerOptions(out Options: TKvmServerOptions;
@@ -236,14 +236,14 @@ begin
       V:=LowerCase(V);
       if (V<>'turbojpeg') and (V<>'auto') and (V<>'h264_nvenc') and (V<>'h264_qsv') and
          (V<>'h264_amf') and (V<>'h264_vaapi') and (V<>'h264_videotoolbox') then
-      begin ErrorText:='Encodeur non pris en charge'; Exit; end;
+      begin ErrorText:='Unsupported encoder'; Exit; end;
       Options.Encoder:=V;
     end
     else if (A = '--bitrate-kbps') or (Copy(A,1,15) = '--bitrate-kbps=') then
     begin
       if not ReadValue('--bitrate-kbps',I,V,ErrorText) then Exit;
       if not IsUnsignedDecimal(V,N) or (N<128) or (N>100000) then
-      begin ErrorText:='--bitrate-kbps attend 128..100000'; Exit; end;
+      begin ErrorText:='--bitrate-kbps expects 128..100000'; Exit; end;
       Options.BitrateKbps:=N;
     end
     else if (A = '--gpu-device') or (Copy(A,1,13) = '--gpu-device=') then
@@ -254,7 +254,7 @@ begin
     begin
       if not ReadValue('--session-policy',I,V,ErrorText) then Exit;
       if (V<>'strict') and (V<>'backend') then
-      begin ErrorText:='--session-policy attend strict ou backend'; Exit; end;
+      begin ErrorText:='--session-policy expects strict or backend'; Exit; end;
       Options.SessionPolicy:=V;
     end
     else if A = '--list-monitors' then Options.ListMonitors := True
@@ -271,7 +271,7 @@ begin
       V := LowerCase(V);
       if (V <> 'auto') and (V <> 'x11') and (V <> 'portal') and
          (V <> 'gdi') and (V <> 'dxgi') and (V <> 'sck') then
-      begin ErrorText := '--backend: auto, x11, portal, gdi, dxgi ou sck'; Exit; end;
+      begin ErrorText := '--backend: auto, x11, portal, gdi, dxgi or sck'; Exit; end;
       Options.Backend := V;
     end
     else if A = '--control' then
@@ -281,7 +281,7 @@ begin
       if not ReadValue('--listen', I, V, ErrorText) then Exit;
       if not IsIPv4(V) then
       begin
-        ErrorText := '--listen attend une adresse IPv4 (ex. 127.0.0.1 ou 0.0.0.0)';
+        ErrorText := '--listen expects an IPv4 address (e.g. 127.0.0.1 or 0.0.0.0)';
         Exit;
       end;
       Options.Listen := V;
@@ -291,7 +291,7 @@ begin
       if not ReadValue('--port', I, V, ErrorText) then Exit;
       if not IsUnsignedDecimal(V, N) or (N < 1) or (N > 65535) then
       begin
-        ErrorText := '--port doit etre entre 1 et 65535';
+        ErrorText := '--port must be between 1 and 65535';
         Exit;
       end;
       Options.Port := Word(N);
@@ -321,21 +321,21 @@ begin
     begin
       if not ReadValue('--monitor', I, V, ErrorText) then Exit;
       if not IsUnsignedDecimal(V, N) or (N > 64) then
-      begin ErrorText := '--monitor doit etre entre 0 et 64'; Exit; end;
+      begin ErrorText := '--monitor must be between 0 and 64'; Exit; end;
       Options.Monitor := N;
     end
     else if (A = '--max-width') or (Copy(A, 1, 12) = '--max-width=') then
     begin
       if not ReadValue('--max-width', I, V, ErrorText) then Exit;
       if not IsUnsignedDecimal(V, N) or (N < 64) or (N > KVM_MAX_FRAME_SIDE) then
-      begin ErrorText := '--max-width doit etre entre 64 et 32768'; Exit; end;
+      begin ErrorText := '--max-width must be between 64 and 32768'; Exit; end;
       Options.MaxWidth := N;
     end
     else if (A = '--max-height') or (Copy(A, 1, 13) = '--max-height=') then
     begin
       if not ReadValue('--max-height', I, V, ErrorText) then Exit;
       if not IsUnsignedDecimal(V, N) or (N < 64) or (N > KVM_MAX_FRAME_SIDE) then
-      begin ErrorText := '--max-height doit etre entre 64 et 32768'; Exit; end;
+      begin ErrorText := '--max-height must be between 64 and 32768'; Exit; end;
       Options.MaxHeight := N;
     end
     else if (A = '--fps') or (Copy(A, 1, 6) = '--fps=') then
@@ -343,7 +343,7 @@ begin
       if not ReadValue('--fps', I, V, ErrorText) then Exit;
       if not IsUnsignedDecimal(V, N) or (N > 1000) then
       begin
-        ErrorText := '--fps attend 0 (libre) ou 1..1000';
+        ErrorText := '--fps expects 0 (unlimited) or 1..1000';
         Exit;
       end;
       Options.FPS := N;
@@ -353,14 +353,14 @@ begin
       if not ReadValue('--quality', I, V, ErrorText) then Exit;
       if not IsUnsignedDecimal(V, N) or (N < 1) or (N > 100) then
       begin
-        ErrorText := '--quality doit etre entre 1 et 100';
+        ErrorText := '--quality must be between 1 and 100';
         Exit;
       end;
       Options.Quality := N;
     end
     else
     begin
-      ErrorText := 'Option inconnue : ' + A;
+      ErrorText := 'Unknown option: ' + A;
       Exit;
     end;
     Inc(I);
@@ -370,17 +370,17 @@ begin
   // Rejecting the PRODUCT of these maxima breaks native multi-monitor mode.
   if Options.ListMonitors then Exit(True);
   if not KvmLoopbackHost(Options.Listen) and (Options.TLSCert='') and not Options.AllowInsecure then
-  begin ErrorText:='Ecoute distante sans TLS refusee. Configurer TLS ou --allow-insecure derriere un VPN.'; Exit; end;
+  begin ErrorText:='Remote listening without TLS is denied. Configure TLS or use --allow-insecure behind a VPN.'; Exit; end;
   if not ProvidedToken then
     Options.Token := GetEnvironmentVariable('LAZDESK_TOKEN');
   if not ValidKvmToken(Options.Token) then
   begin
-    ErrorText := 'Token obligatoire : 16 a 256 caracteres ASCII sans espace.';
+    ErrorText := 'Token required: 16 to 256 ASCII characters without spaces.';
     Exit;
   end;
   if (Options.TLSKey <> '') and (Options.TLSCert = '') then
   begin
-    ErrorText := '--tls-key necessite --tls-cert';
+    ErrorText := '--tls-key requires --tls-cert';
     Exit(False);
   end;
   if Options.ViewToken = '' then
@@ -389,17 +389,17 @@ begin
   begin
     if not Options.AllowControl then
     begin
-      ErrorText := '--view-token necessite --control';
+      ErrorText := '--view-token requires --control';
       Exit(False);
     end;
     if not ValidKvmToken(Options.ViewToken) then
     begin
-      ErrorText := '--view-token invalide (16..256 ASCII)';
+      ErrorText := '--view-token is invalid (16..256 ASCII characters)';
       Exit(False);
     end;
     if Options.Token = Options.ViewToken then
     begin
-      ErrorText := '--view-token et --token doivent etre differents';
+      ErrorText := '--view-token and --token must be different';
       Exit(False);
     end;
   end;
@@ -448,7 +448,7 @@ begin
     begin
       if not ReadValue('--keyboard',I,V,ErrorText) then Exit;
       if (V<>'text') and (V<>'remote') then
-      begin ErrorText:='--keyboard attend text ou remote'; Exit; end;
+      begin ErrorText:='--keyboard expects text or remote'; Exit; end;
       Options.Keyboard:=V;
     end
     else if A = '--tls' then
@@ -464,7 +464,7 @@ begin
       if not ReadValue('--host', I, V, ErrorText) then Exit;
       if not IsClientHost(V) then
       begin
-        ErrorText := '--host attend une adresse IPv4 ou un nom DNS, sans schema ni port';
+        ErrorText := '--host expects an IPv4 address or DNS name, without scheme or port';
         Exit;
       end;
       Options.Host := V;
@@ -474,7 +474,7 @@ begin
       if not ReadValue('--port', I, V, ErrorText) then Exit;
       if not IsUnsignedDecimal(V, N) or (N < 1) or (N > 65535) then
       begin
-        ErrorText := '--port doit etre entre 1 et 65535';
+        ErrorText := '--port must be between 1 and 65535';
         Exit;
       end;
       Options.Port := Word(N);
@@ -487,7 +487,7 @@ begin
     end
     else
     begin
-      ErrorText := 'Option inconnue : ' + A;
+      ErrorText := 'Unknown option: ' + A;
       Exit;
     end;
     AnyOption := True;
@@ -497,7 +497,7 @@ begin
     Options.Token := GetEnvironmentVariable('LAZDESK_TOKEN');
   if (Options.Token <> '') and not ValidKvmToken(Options.Token) then
   begin
-    ErrorText := 'Token invalide : 16 a 256 caracteres ASCII sans espace.';
+    ErrorText := 'Invalid token: 16 to 256 ASCII characters without spaces.';
     Exit;
   end;
   Options.AutoConnect := AnyOption and (Options.Token <> '');

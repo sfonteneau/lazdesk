@@ -143,11 +143,11 @@ end;
 function ClipResultText(R: TKvmClipResult): string;
 begin
   case R of
-    crSkip: Result:='non demande'; crOk: Result:='OK'; crBusy: Result:='occupe/delai depasse';
-    crUnsupported: Result:='indisponible sur ce bureau'; crDenied: Result:='controle/session refuse';
-    crTooLarge: Result:='texte superieur a 64 Kio'; crInvalid: Result:='texte Unicode invalide';
-    crFailed: Result:='echec du presse-papiers systeme'; crUnchanged: Result:='inchange';
-    crNoText: Result:='aucun texte (images/fichiers non transmis)';
+    crSkip: Result:='not requested'; crOk: Result:='OK'; crBusy: Result:='occupe/delai depasse';
+    crUnsupported: Result:='unavailable on this desktop'; crDenied: Result:='control/session denied';
+    crTooLarge: Result:='text exceeds 64 KiB'; crInvalid: Result:='invalid Unicode text';
+    crFailed: Result:='system clipboard error'; crUnchanged: Result:='inchange';
+    crNoText: Result:='no text (images/files are not transferred)';
   end;
 end;
 end.

@@ -147,7 +147,7 @@ begin
        (FCount>=KVM_DECODE_QUEUE_PACKETS) or
        (FBytes+Length(Packet)>KVM_DECODE_QUEUE_BYTES) then
     begin
-      FFatal:='File decode pleine ou trame hors limite';
+      FFatal:='Decode queue full or frame exceeds limits';
       FAccepting:=False; Exit;
     end;
     I:=(FHead+FCount) mod KVM_DECODE_QUEUE_PACKETS;
@@ -178,7 +178,7 @@ begin
   try
     N:=FEventCount;
     if N>=KVM_DECODE_UI_EVENTS then
-      raise Exception.Create('File evenements de controle pleine');
+      raise Exception.Create('Control event queue full');
     FEvents[N]:=Packet; Inc(FEventCount);
   finally LeaveCriticalSection(FLock); end;
 end;
@@ -355,7 +355,7 @@ begin
     'D':
       begin
         if not ReadDesktopState(Packet,Available,Reason,Epoch) then
-          raise Exception.Create('Etat de session invalide');
+          raise Exception.Create('Invalid session state');
         StateChanged:=not FStateKnown or (FWork.Available<>Available) or
           (FWork.Epoch<>Epoch) or (FWork.Reason<>Reason);
         if StateChanged then
@@ -379,7 +379,7 @@ begin
         begin FInvalid:=True; Exit; end;
         StateChanged:=FInvalid or (FWork.Surface.Width<>W) or (FWork.Surface.Height<>H);
         if not AllocateSurface(FWork.Surface,W,H) then
-          raise Exception.Create('Dimensions ecran invalides');
+          raise Exception.Create('Invalid screen dimensions');
         if StateChanged then
         begin
           FillChar(FWork.Surface.Pixels[1],Length(FWork.Surface.Pixels),0);
@@ -390,7 +390,7 @@ begin
     'T','V':
       if FWork.Available and not FInvalid then
       begin
-        FLastDecodeError:='Image invalide ou geometry incoherente';
+        FLastDecodeError:='Invalid image or inconsistent geometry';
         if Packet[1]='T' then FInvalid:=not DecodeTile(Packet)
         else FInvalid:=not DecodeVideo(Packet);
         FBatchTouched:=True;
@@ -398,25 +398,25 @@ begin
     'C':
       begin
         if not ReadCursor(Packet,CX,CY,Visible1) then
-          raise Exception.Create('Curseur invalide');
+          raise Exception.Create('Invalid cursor');
         FWork.CursorX:=CX; FWork.CursorY:=CY;
         FWork.CursorVisible:=Visible1 and FWork.Available; FBatchTouched:=True;
       end;
     'H':
       begin
         if not ReadCursorShape(Packet,Shape) then
-          raise Exception.Create('Forme de curseur invalide');
+          raise Exception.Create('Invalid cursor shape');
         FWork.CursorShape:=Shape;
         FBatchTouched:=True;
       end;
     'I':
       begin
-        if Length(Packet)<>8 then raise Exception.Create('Accuse saisie invalide');
+        if Length(Packet)<>8 then raise Exception.Create('Invalid input acknowledgment');
         PushUIEvent(Packet);
       end;
     'B':
       begin
-        if not ReadBatchEnd(Packet,Serial) then raise Exception.Create('Fin de lot invalide');
+        if not ReadBatchEnd(Packet,Serial) then raise Exception.Create('Invalid batch end');
         Tick:=GetTickCount64;
         FWork.Serial:=Serial;
         if FInvalid or not FWork.Available or not SurfaceValid(FWork.Surface) then
@@ -446,7 +446,7 @@ begin
         FPendingDecodeMs:=0; FPendingCopyMs:=0; FBatchTouched:=False;
         FBatchDamage:=Rect(0,0,0,0);
       end;
-  else raise Exception.Create('Type de trame binaire inconnu');
+  else raise Exception.Create('Unknown binary frame type');
   end;
 end;
 

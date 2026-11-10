@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Regression du build C++/DXGI autonome, sans execution sur Windows.
+"""Regression tests for the standalone C++/DXGI build, without running on Windows.
 
-Controle les garanties de liaison WinPthreads, et verifie le mecanisme
-GNU ar de regroupement avec des objets reels du compilateur hote.
+Checks WinPthreads linking guarantees and validates the
+GNU ar grouping mechanism with real objects built by the host compiler.
 """
 from pathlib import Path
 import importlib.util

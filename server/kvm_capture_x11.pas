@@ -48,15 +48,15 @@ var D: Pointer;
 begin
   Reason := '';
   if LowerCase(GetEnvironmentVariable('XDG_SESSION_TYPE')) = 'wayland' then
-  begin Reason := 'Capture Wayland non disponible: utiliser une session Xorg/X11.';
+  begin Reason := 'Wayland capture is unavailable: use an Xorg/X11 session.';
     Exit(False); end;
   if GetEnvironmentVariable('DISPLAY') = '' then
-  begin Reason := 'DISPLAY absent: lancer depuis la session graphique X11.';
+  begin Reason := 'DISPLAY is unset: run from the X11 graphical session.';
     Exit(False); end;
   D := LockX11;
   try
     Result := D <> nil;
-    if not Result then Reason := 'XOpenDisplay a echoue: DISPLAY/XAUTHORITY.';
+    if not Result then Reason := 'XOpenDisplay failed: DISPLAY/XAUTHORITY.';
   finally UnlockX11; end;
 end;
 function NewImage(D: Pointer; Screen, W, H, X, Y: Integer): Boolean;

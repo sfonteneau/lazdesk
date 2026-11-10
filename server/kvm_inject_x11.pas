@@ -31,7 +31,7 @@ begin
   end;
   try
     Result := XTestQueryExtension(D, E, Err, Major, Minor) <> 0;
-    if not Result then Reason := 'Extension XTEST requise pour souris/clavier';
+    if not Result then Reason := 'XTEST extension required for mouse/keyboard';
   finally
     UnlockX11;
   end;
@@ -59,12 +59,12 @@ begin
     if D = nil then raise Exception.Create('X11 inaccessible');
     Screen := XDefaultScreen(D);
     if DenormalizePoint(M.Bounds,NX,NY,X,Y) then
-    begin if XTestFakeMotionEvent(D,Screen,X,Y,0)=0 then raise Exception.Create('Mouvement XTest refuse'); end
-    else if Action<>2 then raise Exception.Create('Geometrie souris indisponible');
+    begin if XTestFakeMotionEvent(D,Screen,X,Y,0)=0 then raise Exception.Create('XTest pointer movement rejected'); end
+    else if Action<>2 then raise Exception.Create('Mouse geometry unavailable');
     if Action <> 0 then
     begin
       case Button of 1: XB := 1; 2: XB := 3; 3: XB := 2; else Exit; end;
-      if XTestFakeButtonEvent(D,XB,Ord(Action=1),0)=0 then raise Exception.Create('Bouton XTest refuse');
+      if XTestFakeButtonEvent(D,XB,Ord(Action=1),0)=0 then raise Exception.Create('XTest mouse button rejected');
     end;
     XFlush(D);
   finally UnlockX11; end;
@@ -95,25 +95,25 @@ begin
     if FoundCode = 0 then
     begin
       // Do NOT silently type a different symbol or rewrite the user's keymap.
-      raise Exception.Create('Caractere absent de la disposition XKB active.');
+      raise Exception.Create('Character not present in the active XKB layout.');
     end;
     ShiftKey := XKeysymToKeycode(D, $ffe1);
     Level3Key := XKeysymToKeycode(D, $fe03);
     if (((FoundLevel and 1) <> 0) and (ShiftKey = 0)) or
        (((FoundLevel and 2) <> 0) and (Level3Key = 0)) then
-      raise Exception.Create('Modificateur XKB necessaire indisponible.');
+      raise Exception.Create('Required XKB modifier unavailable.');
     // CapsLock would otherwise invert upper/lowercase. Restore it afterward.
     if XkbLockModifiers(D,$100,2,0)=0 then raise Exception.Create('CapsLock XKB inaccessible');
     ShiftDown:=False; Level3Down:=False;
     try
       if (FoundLevel and 1)<>0 then
-      begin ShiftDown:=XTestFakeKeyEvent(D,ShiftKey,1,0)<>0; if not ShiftDown then raise Exception.Create('Shift refuse'); end;
+      begin ShiftDown:=XTestFakeKeyEvent(D,ShiftKey,1,0)<>0; if not ShiftDown then raise Exception.Create('Shift key rejected'); end;
       if (FoundLevel and 2)<>0 then
-      begin Level3Down:=XTestFakeKeyEvent(D,Level3Key,1,0)<>0; if not Level3Down then raise Exception.Create('AltGr refuse'); end;
+      begin Level3Down:=XTestFakeKeyEvent(D,Level3Key,1,0)<>0; if not Level3Down then raise Exception.Create('AltGr key rejected'); end;
       try
-        if XTestFakeKeyEvent(D,FoundCode,1,0)=0 then raise Exception.Create('Texte XTest refuse');
+        if XTestFakeKeyEvent(D,FoundCode,1,0)=0 then raise Exception.Create('XTest text input rejected');
       finally
-        if XTestFakeKeyEvent(D,FoundCode,0,0)=0 then raise Exception.Create('Relachement texte refuse');
+        if XTestFakeKeyEvent(D,FoundCode,0,0)=0 then raise Exception.Create('Text key release rejected');
       end;
     finally
       CleanupOK:=True;
@@ -121,7 +121,7 @@ begin
       if ShiftDown then if XTestFakeKeyEvent(D,ShiftKey,0,0)=0 then CleanupOK:=False;
       if XkbLockModifiers(D,$100,2,State.locked_mods and 2)=0 then CleanupOK:=False;
       XFlush(D);
-      if not CleanupOK then raise Exception.Create('Restauration des modificateurs XKB incomplete');
+      if not CleanupOK then raise Exception.Create('Could not fully restore XKB modifiers');
     end;
   finally UnlockX11; end;
 end;
@@ -138,12 +138,12 @@ begin
     if KeyCode=0 then
     begin
       Symbol:=KvmKeysym(VKey);
-      if Symbol=0 then raise Exception.Create('Touche non mappee sous X11');
+      if Symbol=0 then raise Exception.Create('Key not mapped on X11');
       KeyCode:=XKeysymToKeycode(D,Symbol);
       if (KeyCode=0) and (VKey=$a5) then KeyCode:=XKeysymToKeycode(D,$fe03);
     end;
-    if KeyCode=0 then raise Exception.Create('Touche absente du clavier distant');
-    if XTestFakeKeyEvent(D,KeyCode,Ord(Pressed),0)=0 then raise Exception.Create('XTest refuse la touche');
+    if KeyCode=0 then raise Exception.Create('Key not present on the remote keyboard');
+    if XTestFakeKeyEvent(D,KeyCode,Ord(Pressed),0)=0 then raise Exception.Create('XTest rejected the key');
     if Pressed then HeldCodes[VKey]:=KeyCode else HeldCodes[VKey]:=0;
     XFlush(D);
   finally UnlockX11; end;
@@ -165,7 +165,7 @@ begin
       try
         if XTestFakeButtonEvent(D,B,1,0)=0 then raise Exception.Create('Molette XTest refusee');
       finally
-        if XTestFakeButtonEvent(D,B,0,0)=0 then raise Exception.Create('Relachement molette refuse');
+        if XTestFakeButtonEvent(D,B,0,0)=0 then raise Exception.Create('Mouse wheel release rejected');
       end;
     end;
     XFlush(D);

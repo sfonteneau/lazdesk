@@ -54,10 +54,10 @@ begin
       DecodeProc:=@KvmDecode; DecoderClose:=@KvmDecoderClose;
       Pointer(EncodeBgrProc):=@KvmEncodeBgr24; DecodeBgrxProc:=@KvmDecodeBgrx32;
       Result:=Abi()=$00090001; LinkedReady:=Result;
-      if not Result then Reason:='ABI codec integre incompatible';
+      if not Result then Reason:='Incompatible built-in codec ABI';
       Exit;
       {$ELSE}
-      Reason:='H264 non integre a ce build autonome (recompiler avec --with-codec). JPEG disponible.';
+      Reason:='H264 is not included in this standalone build (rebuild with --with-codec). JPEG is available.';
       Exit(False);
       {$ENDIF}
     {$ELSE}
@@ -68,7 +68,7 @@ begin
     // Deliberately not the current directory or PATH.
     Name:=IncludeTrailingPathDelimiter(ExtractFilePath(ExpandFileName(ParamStr(0))))+Name;
     Lib:=LoadLibrary(Name);
-    if Lib=NilHandle then begin Reason:='Pont codec absent/inchargeable : '+Name; Exit(False); end;
+    if Lib=NilHandle then begin Reason:='Codec bridge missing or failed to load: '+Name; Exit(False); end;
     Pointer(Abi):=GetProcedureAddress(Lib,'lazdesk_codec_abi');
     Pointer(EncoderOpen):=GetProcedureAddress(Lib,'lazdesk_encoder_open');
     Pointer(EncodeProc):=GetProcedureAddress(Lib,'lazdesk_encode');
@@ -82,7 +82,7 @@ begin
       Assigned(EncodeBgrProc) and Assigned(EncoderClose) and Assigned(DecoderOpen) and
       Assigned(DecodeProc) and Assigned(DecodeBgrxProc) and Assigned(DecoderClose);
     if Result then Result:=Abi()=$00090001;
-    if not Result then begin UnloadLibrary(Lib); Lib:=NilHandle; Reason:='ABI codec incompatible'; end;
+    if not Result then begin UnloadLibrary(Lib); Lib:=NilHandle; Reason:='Incompatible codec ABI'; end;
     {$ENDIF}
   finally LeaveCriticalSection(Lock); end;
 end;

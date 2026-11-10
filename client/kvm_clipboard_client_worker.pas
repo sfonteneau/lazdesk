@@ -142,7 +142,7 @@ begin
         begin
           if not Pending or HaveResponse or (Incoming.Serial<>Request.Serial) or
              (Incoming.Epoch<>Request.Epoch) then
-          begin Disable(3,'Presse-papiers : reponse inattendue, synchronisation arretee.'); Finish; end
+          begin Disable(3,'Clipboard: unexpected reply; synchronization stopped.'); Finish; end
           else
           begin Response:=Incoming; HaveResponse:=True; CompareDone:=False; LocalMatches:=False; ApplyAt:=0; end;
           Incoming.Text:='';
@@ -157,8 +157,8 @@ begin
               if Response.WriteResult=crOk then
               begin LocalText:=Request.Text; LocalStamp:=AtSendStamp; LocalValid:=True; end
               else if Response.WriteResult=crBusy then
-                Notice(0,'Presse-papiers distant occupe : nouvel essai apres liberation.')
-              else Disable(1,'Presse-papiers local -> distant : '+ClipResultText(Response.WriteResult));
+                Notice(0,'Remote clipboard busy: retrying once available.')
+              else Disable(1,'Clipboard local -> remote: '+ClipResultText(Response.WriteResult));
               // Process receipt only once, including if local clipboard is busy.
               Request.Flags:=Request.Flags and not KVM_CLIP_WRITE;
             end;
@@ -190,20 +190,20 @@ begin
               begin
                 // Suppression of echo: received text becomes the local baseline.
                 LocalText:=Response.Text; LocalStamp:=B.ChangeStamp; LocalValid:=True; KnownRead:=Response.Serial;
-                Notice(0,'Presse-papiers distant -> local : texte recu.');
+                Notice(0,'Clipboard remote -> local: text received.');
               end
-              else Disable(2,'Presse-papiers local : '+ClipResultText(Status));
+              else Disable(2,'Local clipboard: '+ClipResultText(Status));
             end
             else if (Response.ReadResult in [crDenied,crUnsupported,crFailed,crInvalid]) and
               ((Mask and KVM_CLIP_READ)<>0) then
-              Disable(2,'Presse-papiers distant -> local : '+ClipResultText(Response.ReadResult))
+              Disable(2,'Clipboard remote -> local: '+ClipResultText(Response.ReadResult))
             else if Response.ReadResult=crTooLarge then
-              Notice(0,'Presse-papiers distant : texte superieur a 64 Kio, non copie.');
+              Notice(0,'Remote clipboard: text exceeds 64 KiB; not copied.');
             Finish;
           end
           else if GetTickCount64-SentAt>KVM_CLIP_TIMEOUT_MS then
           begin
-            Disable(3,'Presse-papiers : reponse absente. Aucun renvoi automatique du texte.');
+            Disable(3,'Clipboard: no reply. Text will not be retransmitted automatically.');
             Finish;
           end;
           FWake.WaitFor(20); Continue;
@@ -211,7 +211,7 @@ begin
         if (Mask=0) or (Epoch=0) or (GetTickCount64<PollAt) then
         begin FWake.WaitFor(20); Continue; end;
         if (B=nil) or not B.Ready then
-        begin Disable(3,'Presse-papiers local indisponible (Wayland natif non pris en charge).'); Continue; end;
+        begin Disable(3,'Local clipboard unavailable (native Wayland not supported).'); Continue; end;
         Request.Text:=''; Request.Flags:=Mask and KVM_CLIP_READ;
         AtSendValid:=False; AtSendText:='';
         if (Mask and KVM_CLIP_WRITE)<>0 then
@@ -229,8 +229,8 @@ begin
             begin Request.Flags:=Request.Flags or KVM_CLIP_WRITE; Request.Text:=Text; end;
           end
           else if Status=crNoText then LocalValid:=False
-          else if Status=crTooLarge then Notice(0,'Presse-papiers local : texte superieur a 64 Kio, non envoye.')
-          else if Status<>crBusy then Disable(1,'Presse-papiers local : '+ClipResultText(Status));
+          else if Status=crTooLarge then Notice(0,'Local clipboard: text exceeds 64 KiB; not sent.')
+          else if Status<>crBusy then Disable(1,'Local clipboard: '+ClipResultText(Status));
         end;
         if Request.Flags=0 then begin PollAt:=GetTickCount64+KVM_CLIP_POLL_MS; Continue; end;
         // UI may have disabled a direction while ReadText waited on the OS.
@@ -241,7 +241,7 @@ begin
         Pending:=True; HaveResponse:=False; SentAt:=GetTickCount64;
         FSend(MakeClipRequest(Request));
       except
-        Disable(3,'Presse-papiers : erreur native, synchronisation arretee (contenu non journalise).');
+        Disable(3,'Clipboard: native error; synchronization stopped (content not logged).');
         Finish;
       end;
       FWake.WaitFor(20);

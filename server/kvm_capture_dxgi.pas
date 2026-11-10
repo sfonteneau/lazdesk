@@ -30,19 +30,19 @@ begin
     OpenNative:=@KvmDxgiOpen; ReadNative:=@KvmDxgiRead; CloseNative:=@KvmDxgiClose;
     CursorEmbeddedNative:=@KvmDxgiCursorEmbedded;
     Result:=Abi()=3;
-    if not Result then Reason:='ABI DXGI integre incompatible';
+    if not Result then Reason:='Incompatible built-in DXGI ABI';
     Exit;
     {$ELSE}
-    Reason:='DXGI non integre dans ce profil autonome. Recompiler avec --with-dxgi ou utiliser --backend gdi.';
+    Reason:='DXGI is not included in this standalone profile. Rebuild with --with-dxgi or use --backend gdi.';
     Exit;
     {$ENDIF}
   {$ELSE}
   if Lib = NilHandle then
     Lib := LoadLibrary(ExtractFilePath(ExpandFileName(ParamStr(0))) + 'lazdesk_dxgi.dll');
-  if Lib = NilHandle then begin Reason := 'lazdesk_dxgi.dll absent: compiler native/windows/build.cmd'; Exit; end;
+  if Lib = NilHandle then begin Reason := 'lazdesk_dxgi.dll is missing: run native/windows/build.cmd'; Exit; end;
   Pointer(Abi) := GetProcedureAddress(Lib, 'kvm_dxgi_abi');
-  if not Assigned(Abi) then begin Reason := 'Pont DXGI sans ABI'; Exit; end;
-  if Abi() <> 3 then begin Reason := 'Pont DXGI incompatible (recompiler lazdesk_dxgi.dll)'; Exit; end;
+  if not Assigned(Abi) then begin Reason := 'DXGI bridge has no ABI version'; Exit; end;
+  if Abi() <> 3 then begin Reason := 'Incompatible DXGI bridge (rebuild lazdesk_dxgi.dll)'; Exit; end;
   Pointer(OpenNative) := GetProcedureAddress(Lib, 'kvm_dxgi_open');
   Pointer(ReadNative) := GetProcedureAddress(Lib, 'kvm_dxgi_read');
   Pointer(CloseNative) := GetProcedureAddress(Lib, 'kvm_dxgi_close');

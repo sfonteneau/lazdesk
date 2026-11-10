@@ -37,16 +37,16 @@ API void lazdesk_session_close(void *opaque) {
 API void *lazdesk_session_open_ex(char *error, size_t capacity) {
   if(error && capacity) error[0]=0;
   KvmSession *s=calloc(1,sizeof(*s));
-  if(!s) { if(error && capacity) snprintf(error,capacity,"allocation impossible"); return NULL; }
+  if(!s) { if(error && capacity) snprintf(error,capacity,"allocation failed"); return NULL; }
   s->lib=dlopen("libsystemd.so.0",RTLD_NOW|RTLD_LOCAL);
   if(!s->lib) {
     const char *e=dlerror();
-    if(error && capacity) snprintf(error,capacity,"libsystemd.so.0: %s", e?e:"chargement impossible");
+    if(error && capacity) snprintf(error,capacity,"libsystemd.so.0: %s", e?e:"failed to load");
     goto fail;
   }
 #define GET(field,name) do { \
   *(void **)(&s->field)=dlsym(s->lib,name); \
-  if(!s->field) { if(error && capacity) snprintf(error,capacity,"libsystemd.so.0: symbole %s absent",name); goto fail; } \
+  if(!s->field) { if(error && capacity) snprintf(error,capacity,"libsystemd.so.0: missing symbol %s",name); goto fail; } \
 } while(0)
   GET(pid_session,"sd_pid_get_session"); GET(session_uid,"sd_session_get_uid");
   GET(session_class,"sd_session_get_class"); GET(open_system,"sd_bus_open_system");

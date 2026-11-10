@@ -111,7 +111,7 @@ for option in ["--listen", "--port", "--token", "--host", "--fps", "--quality", 
 check("ReadLn(Input)" not in text("server/LazDeskServer.lpr"), "No interactive stdin dependency")
 check("0.0.0.0" in cli and "Options.Listen := '127.0.0.1'" in cli, "Listen options")
 check("XOpenDisplay" not in text("server/kvm_inject_x11.pas"), "X11 input connection must be reused")
-check("XOpenDisplay" not in text("server/kvm_capture_x11.pas").replace("XOpenDisplay a echoue", ""), "X11 capture connection must be reused")
+check("XOpenDisplay" not in text("server/kvm_capture_x11.pas").replace("XOpenDisplay failed", ""), "X11 capture connection must be reused")
 for word in ["XShmGetImage", "XGetSubImage", "OWNER_RW = 384", "Image^.data := nil"]:
     check(word in text("server/kvm_capture_x11.pas"), f"X11 path {word}")
 for name in ["kvm_capture_win", "kvm_capture_x11", "kvm_capture_mac"]:

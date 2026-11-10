@@ -1,11 +1,11 @@
-# Archives natives de compilation
+# Native build archives
 
-`build/build_standalone.py` cree ici un sous-dossier par CPU/OS.
-Il contient les archives `.a`, les `.o` intermediaires, les fichiers `.inc`
-de liaison et le manifeste du build. Ces fichiers ne vont PAS sur la machine
-cible. Ne pas reutiliser une archive d'un autre OS/CPU/compilateur.
+`build/build_standalone.py` creates a subdirectory here for each CPU/OS target.
+It contains `.a` archives, intermediate `.o` objects, `.inc` linkage files,
+and the build manifest. These files do **not** belong on the target machine.
+Never reuse an archive built for a different OS, CPU, or compiler.
 
-Aucune bibliotheque tierce precompilee n'est incluse dans les sources livrees.
-Les archives sont generees/copiees sur la machine de compilation depuis les
-sources natives du projet et la bibliotheque TurboJPEG choisie.
-Une archive d'import `.dll.a` n'est pas une bibliotheque statique autonome.
+No precompiled third-party libraries are included with these sources.
+Archives are built or copied on the build machine from the project's native
+sources and the selected TurboJPEG library.
+A `.dll.a` import archive is **not** a self-contained static library.

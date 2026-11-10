@@ -2,7 +2,7 @@
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 if ! command -v fpc >/dev/null 2>&1; then
-  echo 'FPC non installe : tests Pascal non executes.' >&2
+  echo 'FPC is not installed: Pascal tests were not run.' >&2
   exit 2
 fi
 TMP=$(mktemp -d)

@@ -14,8 +14,8 @@ interface
 
 uses ctypes;
 
-// On Darwin, FPC ajoute lui-meme le prefixe '_' aux symboles C.
-// Ne pas le mettre dans 'external name' (sinon __CG... / __CF...).
+// On Darwin, FPC automatically prefixes C symbols with '_'.
+// Do not include it in 'external name' (otherwise __CG... / __CF...).
 
 type
   TCGPoint = record

@@ -76,8 +76,8 @@ begin
   M := CaptureMonitor;
   if not ScaledSize(M.Bounds.W, M.Bounds.H, MaxW, MaxH, W, H) then
     raise Exception.CreateFmt(
-      'Bureau %dx%d hors limites de capture (%d px par cote / %d pixels au total). '
-      + 'Recompiler x64 ou reduire volontairement --max-width/--max-height.',
+      'Desktop %dx%d exceeds capture limits (%d px per side / %d pixels total). '
+      + 'Rebuild for x64 or explicitly lower --max-width/--max-height.',
       [M.Bounds.W, M.Bounds.H, KVM_MAX_FRAME_SIDE, KVM_MAX_FRAME_PIXELS]);
   if not EnsureBuffer(W, H) then begin CloseCapture; Exit; end;
   Rop := SRCCOPY;

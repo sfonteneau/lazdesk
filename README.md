@@ -1,24 +1,24 @@
 # LazDesk
 
-LazDesk est une solution légère de contrôle de bureau à distance, avec un **serveur** sur la machine à piloter et un **client** sur la machine de contrôle.
+LazDesk is a lightweight remote desktop control solution, with a **server** on the computer being controlled and a **client** on the controlling computer.
 
-## Fonctionnalités
+## Features
 
-- Capture d'écran JPEG avec qualité et FPS configurables.
-- Multi-écran et résolution native.
-- Clavier, souris, curseur distant et presse-papiers texte Unicode.
-- **Windows** : capture GDI ou DXGI (multi-écran).
-- **Linux** : X11, ou Wayland via portail de capture.
-- **macOS** : capture avec ScreenCaptureKit.
-- Builds autonomes : un exécutable serveur et un exécutable client, sans DLL LazDesk séparée.
+- JPEG screen capture with configurable quality and frame rate.
+- Multi-monitor support and native resolution.
+- Keyboard, mouse, remote cursor, and Unicode text clipboard.
+- **Windows**: GDI or DXGI capture (including multi-monitor desktops).
+- **Linux**: X11, or Wayland via the desktop capture portal.
+- **macOS**: ScreenCaptureKit capture.
+- Standalone builds: one server executable and one client executable, without separate LazDesk DLLs.
 
-## Compilation
+## Building
 
-Prérequis : **Free Pascal / Lazarus**, **mORMot2**, **TurboJPEG** et les outils de compilation de la plateforme. Sous Windows, prévoir également **MinGW-w64** et **Python 3**.
+Requirements: **Free Pascal / Lazarus**, **mORMot2**, **TurboJPEG**, and platform-specific build tools. On Windows, you also need **MinGW-w64** and **Python 3**.
 
-### Windows x86 avec DXGI statique
+### Windows x86 with statically linked DXGI
 
-Exemple pour une installation Lazarus / MSYS2 :
+Example for a Lazarus / MSYS2 installation:
 
 ```bat
 build_standalone_windows.cmd --arch x86 ^
@@ -30,49 +30,49 @@ build_standalone_windows.cmd --arch x86 ^
   --with-dxgi
 ```
 
-Pour **x64**, utiliser `--arch x64`, le compilateur FPC x64 et les bibliothèques `mingw64` correspondantes.
+For **x64**, use `--arch x64`, the x64 FPC compiler, and the corresponding `mingw64` libraries.
 
-Sortie x86 : `dist/i386-win32/`. En mode autonome, DXGI est intégré au serveur : **pas besoin de `lazdesk_dxgi.dll`**.
+x86 output: `dist/i386-win32/`. In standalone mode, DXGI is linked into the server: **`lazdesk_dxgi.dll` is not required**.
 
 ### Linux / macOS
 
 ```sh
-sh build/build_standalone.sh --turbojpeg-archive /chemin/vers/libturbojpeg.a
+sh build/build_standalone.sh --turbojpeg-archive /path/to/libturbojpeg.a
 ```
 
-Sous Linux, ajouter `--with-portal` pour activer la capture Wayland. Les bibliothèques système de la plateforme restent nécessaires.
+On Linux, add `--with-portal` to enable Wayland capture. Platform system libraries are still required.
 
-## Démarrage rapide
+## Quick start
 
-Définir le même jeton sur les deux machines (`LAZDESK_TOKEN`, au moins 16 caractères).
+Set the same token on both machines (`LAZDESK_TOKEN`, at least 16 ASCII characters).
 
-Exemple de serveur Windows avec deux écrans :
+Example Windows server with two monitors:
 
 ```bat
-set "LAZDESK_TOKEN=remplacer-par-un-jeton-secret"
+set "LAZDESK_TOKEN=replace-with-a-secret-token"
 dist\i386-win32\LazDeskServer.exe --listen 0.0.0.0 --port 7900 --control --backend dxgi --monitor 0 --fps 30 --quality 100 --no-adaptive
 ```
 
-Sur le client Windows :
+On the Windows client:
 
 ```bat
-set "LAZDESK_TOKEN=remplacer-par-un-jeton-secret"
-dist\i386-win32\LazDeskClient.exe --host IP_DU_SERVEUR --port 7900 --control
+set "LAZDESK_TOKEN=replace-with-a-secret-token"
+dist\i386-win32\LazDeskClient.exe --host SERVER_IP --port 7900 --control
 ```
 
-`--monitor 0` sélectionne le bureau virtuel complet. Pour forcer la capture GDI, remplacer `dxgi` par `gdi`. En mode `--backend auto`, DXGI conserve un repli GDI en cas d'indisponibilite.
+`--monitor 0` selects the entire virtual desktop. To force GDI capture, replace `dxgi` with `gdi`. With `--backend auto`, DXGI falls back to GDI if unavailable.
 
-**Sécurité :** éviter d'exposer directement le port de contrôle sur Internet ; utiliser un réseau privé ou un tunnel sécurisé.
+**Security:** avoid exposing the control port directly to the Internet; use a private network or secure tunnel. For non-loopback connections, configure TLS or explicitly use `--allow-insecure` only behind a trusted VPN or tunnel.
 
-## Protocole actuel et nettoyage
+## Current protocol and cleanup
 
-- **Client et serveur uniques** : `LazDeskClient` / `LazDeskServer`, sous-protocole WebSocket `lazdesk8`.
-- La saisie Unicode sur le reseau utilise uniquement le message `X` avec accuse de reception `I` ; le marqueur `U` reste **interne** a la file de saisie (pas un ancien client).
-- La topologie des moniteurs est transmise avec `MONITOR_LAYOUT` uniquement.
-- Les fallbacks de capture (DXGI/GDI, X11/Wayland, etc.), de codecs et de securite ne sont pas des versions historiques du client ou du serveur et sont conserves.
-- Les tests V7/V8/V9 sont des **tests de regression sur le code actuel**, pas des applications anciennes. Ils restent dans l'archive.
+- **One client and one server**: `LazDeskClient` / `LazDeskServer`, using WebSocket subprotocol `lazdesk8`.
+- Unicode text input over the network uses only the `X` message with `I` acknowledgments. The `U` marker remains **internal** to the input queue (it is not a legacy client message).
+- Monitor topology is transmitted exclusively via `MONITOR_LAYOUT`.
+- Capture fallbacks (DXGI/GDI, X11/Wayland, etc.), codecs, and security fallbacks are retained; they are not legacy client or server versions.
+- The V7/V8/V9 tests are **regression tests against the current code**, not old applications. They remain in this repository.
 
-Le depot ne livre plus de bibliotheque Linux precompilee. Pour produire le pont de session en mode dynamique sous Linux :
+This repository no longer ships a precompiled Linux library. To build the session bridge in dynamic mode on Linux:
 
 ```sh
 sh native/session/build.sh

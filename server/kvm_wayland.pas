@@ -38,23 +38,23 @@ begin
   {$IFDEF KVM_STANDALONE}
     {$IFDEF KVM_STATIC_PORTAL}
     Abi:=@KvmPortalAbi;
-    if Abi()<>1 then begin Reason:='ABI portail integre incompatible'; Exit; end;
+    if Abi()<>1 then begin Reason:='Incompatible built-in portal ABI'; Exit; end;
     NativeOpen:=@KvmPortalOpen; NativeClose:=@KvmPortalClose;
     NativeRead:=@KvmPortalRead; NativeAlive:=@KvmPortalAlive;
     NativeActive:=@KvmPortalActive; NativeMouse:=@KvmPortalMouse;
     NativeKey:=@KvmPortalKey; NativeWheel:=@KvmPortalWheel;
     {$ELSE}
-    Reason:='Wayland non integre dans ce profil autonome. Recompiler avec --with-portal; le build de base cible X11.';
+    Reason:='Wayland is not included in this standalone profile. Rebuild with --with-portal; the default build targets X11.';
     Exit;
     {$ENDIF}
   {$ELSE}
   if Lib = NilHandle then
     Lib := LoadLibrary(ExtractFilePath(ExpandFileName(ParamStr(0))) + 'liblazdesk_portal.so');
   if Lib = NilHandle then
-  begin Reason := 'Compiler native/linux/build.sh et placer liblazdesk_portal.so a cote du serveur.'; Exit; end;
+  begin Reason := 'Run native/linux/build.sh and place liblazdesk_portal.so next to the server.'; Exit; end;
   Pointer(Abi) := GetProcedureAddress(Lib, 'kvm_portal_abi');
-  if not Assigned(Abi) then begin Reason := 'Pont portail sans numero ABI'; Exit; end;
-  if Abi() <> 1 then begin Reason := 'Pont portail ABI incompatible'; Exit; end;
+  if not Assigned(Abi) then begin Reason := 'Portal bridge has no ABI version'; Exit; end;
+  if Abi() <> 1 then begin Reason := 'Incompatible portal bridge ABI'; Exit; end;
   Pointer(NativeOpen) := GetProcedureAddress(Lib, 'kvm_portal_open');
   Pointer(NativeClose) := GetProcedureAddress(Lib, 'kvm_portal_close');
   Pointer(NativeRead) := GetProcedureAddress(Lib, 'kvm_portal_read');
@@ -66,11 +66,11 @@ begin
   if not Assigned(NativeOpen) or not Assigned(NativeClose) or not Assigned(NativeRead) or
      not Assigned(NativeAlive) or not Assigned(NativeActive) or not Assigned(NativeMouse) or
      not Assigned(NativeKey) or not Assigned(NativeWheel) then
-  begin Reason := 'Pont portail incomplet'; Exit; end;
+  begin Reason := 'Incomplete portal bridge'; Exit; end;
   {$ENDIF}
   FillChar(Err, SizeOf(Err), 0);
-  WriteLn('[portail] Autoriser localement le partage de l ecran',
-    ' et, si demande, le clavier et la souris. Delai maximal : 120 s par dialogue.');
+  WriteLn('[portal] Allow screen sharing locally',
+    ' and, if prompted, keyboard and mouse access. Timeout: 120 s per dialog.');
   Result := NativeOpen(Ord(Control), FPS, Handle, @Err[0], SizeOf(Err)) = 0;
   if not Result then Reason := string(PAnsiChar(@Err[0]));
   Active := Result;
@@ -113,14 +113,14 @@ begin
       if (W < 1) or (H < 1) or (W > KVM_MAX_FRAME_SIDE) or
          (H > KVM_MAX_FRAME_SIDE) or
          (Int64(W) * H > KVM_MAX_FRAME_PIXELS) then
-        raise Exception.Create('Portail/PipeWire: dimensions hors limites');
+        raise Exception.Create('Portal/PipeWire: dimensions exceed limits');
       Bytes := Int64(W) * H * 3;
       if Bytes > Length(Buffer) then SetLength(Buffer, Bytes);
       Continue;
     end;
     // A paused or revoked portal is never reopened without local consent.
     if Status < 0 then
-      raise Exception.Create('Portail/PipeWire: ' + string(PAnsiChar(@Err[0])));
+      raise Exception.Create('Portal/PipeWire: ' + string(PAnsiChar(@Err[0])));
     if (Status <> 1) or not AllocateFrame(Frame, W, H) then Exit;
     Move(Buffer[1], Frame.RGB[1], Length(Frame.RGB));
     Exit(True);
@@ -129,7 +129,7 @@ end;
 procedure WaylandMouse(Action, Button: Byte; X, Y: Word);
 begin
   if WaylandAlive and (NativeMouse(Handle, Action, Button, X, Y) = 0) then
-    raise Exception.Create('Portail: commande souris refusee.');
+    raise Exception.Create('Portal: mouse command rejected.');
 end;
 procedure WaylandKey(Pressed: Boolean; VKey: Word);
 var Sym: Cardinal;
@@ -137,7 +137,7 @@ begin
   Sym := KvmKeysym(VKey);
   if (Sym <> 0) and WaylandAlive then
     if NativeKey(Handle, Sym, Ord(Pressed)) = 0 then
-      raise Exception.Create('Portail: commande clavier refusee.');
+      raise Exception.Create('Portal: keyboard command rejected.');
 end;
 procedure WaylandText(CodePoint: Cardinal);
 var Sym: Cardinal;
@@ -146,14 +146,14 @@ begin
     ((CodePoint >= $d800) and (CodePoint <= $dfff)) or not WaylandAlive then Exit;
   if CodePoint <= $ff then Sym := CodePoint else Sym := $01000000 or CodePoint;
   if NativeKey(Handle, Sym, 1) = 0 then
-    raise Exception.Create('Portail: caractere non accepte.');
+    raise Exception.Create('Portal: character not accepted.');
   if NativeKey(Handle, Sym, 0) = 0 then
-    raise Exception.Create('Portail: relachement du caractere refuse.');
+    raise Exception.Create('Portal: character key release rejected.');
 end;
 procedure WaylandWheel(Notches: SmallInt);
 begin
   if WaylandAlive and (NativeWheel(Handle, Notches) = 0) then
-    raise Exception.Create('Portail: commande molette refusee.');
+    raise Exception.Create('Portal: mouse wheel command rejected.');
 end;
 finalization
   // TKvmServer is destroyed (network workers joined) before closing the portal.

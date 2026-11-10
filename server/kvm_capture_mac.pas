@@ -42,7 +42,7 @@ begin
   if not Result then
   begin
     CGRequestScreenCaptureAccess;
-    Reason := 'Autoriser Enregistrement de l ecran pour LazDeskServer puis relancer.';
+    Reason := 'Allow Screen Recording for LazDeskServer, then restart.';
     Exit;
   end;
   {$IFDEF KVM_STANDALONE}
@@ -64,7 +64,7 @@ begin
     end;
   end;
   Result := (Lib <> NilHandle) and Assigned(OpenStream) and Assigned(ReadStream) and Assigned(CloseStream) and Assigned(Available) and Assigned(ProbeSession);
-  if not Result then Reason := 'Compiler native/macos/build.sh (macOS 12.3+, Xcode), puis placer liblazdesk_sck.dylib a cote du serveur.';
+  if not Result then Reason := 'Run native/macos/build.sh (macOS 12.3+, Xcode), then place liblazdesk_sck.dylib next to the server.';
   {$ENDIF}
 end;
 procedure CloseCapture;

@@ -188,7 +188,7 @@ var
 begin
   inherited CreateNew(AOwner, 1);
   InitCriticalSection(FLock);
-  Caption := 'LazDesk v9 | F11 : plein ecran';
+  Caption := 'LazDesk v9 | F11: Full screen';
   Width := 1080;
   Height := 730;
   Position := poScreenCenter;
@@ -231,74 +231,74 @@ begin
   FDesktopPaused := True;
   WebSocketsMaxFrameMB := 4;
 
-  // Barre de menus Windows classique : toute la configuration utilisateur
-  // est accessible ici; aucun panneau de commandes flottant n'est expose.
+  // Standard Windows menu bar: all user settings
+  // are available here; there is no floating control panel.
   FMainMenu:=TMainMenu.Create(Self);
   Menu:=FMainMenu;
 
   FFileMenu:=TMenuItem.Create(FMainMenu);
-  FFileMenu.Caption:='Fichier';
+  FFileMenu.Caption:='File';
   FMainMenu.Items.Add(FFileMenu);
   FMenuConnectionSettings:=TMenuItem.Create(FMainMenu);
-  FMenuConnectionSettings.Caption:='Parametres de connexion...';
+  FMenuConnectionSettings.Caption:='Connection settings...';
   FMenuConnectionSettings.OnClick:=@ConnectionSettingsClick; FFileMenu.Add(FMenuConnectionSettings);
   Sep:=TMenuItem.Create(FMainMenu); Sep.Caption:='-'; FFileMenu.Add(Sep);
   FMenuConnect:=TMenuItem.Create(FMainMenu);
-  FMenuConnect.Caption:='Connecter'; FMenuConnect.OnClick:=@ConnectClick;
+  FMenuConnect.Caption:='Connect'; FMenuConnect.OnClick:=@ConnectClick;
   FFileMenu.Add(FMenuConnect);
   FMenuDisconnect:=TMenuItem.Create(FMainMenu);
-  FMenuDisconnect.Caption:='Deconnecter'; FMenuDisconnect.Enabled:=False;
+  FMenuDisconnect.Caption:='Disconnect'; FMenuDisconnect.Enabled:=False;
   FMenuDisconnect.OnClick:=@DisconnectClick; FFileMenu.Add(FMenuDisconnect);
   Sep:=TMenuItem.Create(FMainMenu); Sep.Caption:='-'; FFileMenu.Add(Sep);
   FMenuQuit:=TMenuItem.Create(FMainMenu);
-  FMenuQuit.Caption:='Quitter'; FMenuQuit.OnClick:=@QuitClick; FFileMenu.Add(FMenuQuit);
+  FMenuQuit.Caption:='Exit'; FMenuQuit.OnClick:=@QuitClick; FFileMenu.Add(FMenuQuit);
 
   FViewMenu:=TMenuItem.Create(FMainMenu);
-  FViewMenu.Caption:='Affichage'; FMainMenu.Items.Add(FViewMenu);
+  FViewMenu.Caption:='View'; FMainMenu.Items.Add(FViewMenu);
   FMenuMonitors:=TMenuItem.Create(FMainMenu);
-  FMenuMonitors.Caption:='Moniteurs'; FMenuMonitors.Enabled:=False;
+  FMenuMonitors.Caption:='Monitors'; FMenuMonitors.Enabled:=False;
   FViewMenu.Add(FMenuMonitors);
   FMenuRefresh:=TMenuItem.Create(FMainMenu);
-  FMenuRefresh.Caption:='Rafraichir'; FMenuRefresh.Enabled:=False;
+  FMenuRefresh.Caption:='Refresh'; FMenuRefresh.Enabled:=False;
   FMenuRefresh.OnClick:=@RefreshClick; FViewMenu.Add(FMenuRefresh);
   Sep:=TMenuItem.Create(FMainMenu); Sep.Caption:='-'; FViewMenu.Add(Sep);
   FMenuFullscreen:=TMenuItem.Create(FMainMenu);
-  FMenuFullscreen.Caption:='Plein ecran'+#9+'F11';
+  FMenuFullscreen.Caption:='Full screen'+#9+'F11';
   FMenuFullscreen.OnClick:=@FullScreenMenuClick; FViewMenu.Add(FMenuFullscreen);
 
   FControlMenu:=TMenuItem.Create(FMainMenu);
-  FControlMenu.Caption:='Controle'; FMainMenu.Items.Add(FControlMenu);
+  FControlMenu.Caption:='Control'; FMainMenu.Items.Add(FControlMenu);
   FMenuControl:=TMenuItem.Create(FMainMenu);
-  FMenuControl.Caption:='Autoriser mon controle';
+  FMenuControl.Caption:='Allow me to control';
   FMenuControl.OnClick:=@ControlMenuClick; FControlMenu.Add(FMenuControl);
   FMenuKeyboardMode:=TMenuItem.Create(FMainMenu);
-  FMenuKeyboardMode.Caption:='Mode clavier'; FControlMenu.Add(FMenuKeyboardMode);
+  FMenuKeyboardMode.Caption:='Keyboard mode'; FControlMenu.Add(FMenuKeyboardMode);
   FMenuUnicodeKeys:=TMenuItem.Create(FMainMenu);
-  FMenuUnicodeKeys.Caption:='Automatique : texte Unicode + raccourcis';
+  FMenuUnicodeKeys.Caption:='Automatic: Unicode text + shortcuts';
   FMenuUnicodeKeys.RadioItem:=True; FMenuUnicodeKeys.GroupIndex:=41;
   FMenuUnicodeKeys.OnClick:=@KeyboardMenuClick; FMenuKeyboardMode.Add(FMenuUnicodeKeys);
   FMenuRemoteKeys:=TMenuItem.Create(FMainMenu);
-  FMenuRemoteKeys.Caption:='Touches physiques : disposition distante';
+  FMenuRemoteKeys.Caption:='Physical keys: remote layout';
   FMenuRemoteKeys.RadioItem:=True; FMenuRemoteKeys.GroupIndex:=41;
   FMenuRemoteKeys.OnClick:=@KeyboardMenuClick; FMenuKeyboardMode.Add(FMenuRemoteKeys);
   FMenuText:=TMenuItem.Create(FMainMenu);
-  FMenuText.Caption:='Saisir / coller du texte Unicode...'; FMenuText.Enabled:=False;
+  FMenuText.Caption:='Type / paste Unicode text...'; FMenuText.Enabled:=False;
   FMenuText.OnClick:=@TextClick; FControlMenu.Add(FMenuText);
   Sep:=TMenuItem.Create(FMainMenu); Sep.Caption:='-'; FControlMenu.Add(Sep);
   FMenuClipboard:=TMenuItem.Create(FMainMenu);
-  FMenuClipboard.Caption:='Presse-papiers'; FControlMenu.Add(FMenuClipboard);
+  FMenuClipboard.Caption:='Clipboard'; FControlMenu.Add(FMenuClipboard);
   FMenuClipToRemote:=TMenuItem.Create(FMainMenu);
-  FMenuClipToRemote.Caption:='Mon presse-papiers -> distant';
+  FMenuClipToRemote.Caption:='My clipboard -> remote';
   FMenuClipToRemote.OnClick:=@ClipboardMenuClick; FMenuClipboard.Add(FMenuClipToRemote);
   FMenuClipFromRemote:=TMenuItem.Create(FMainMenu);
-  FMenuClipFromRemote.Caption:='Distant -> mon presse-papiers';
+  FMenuClipFromRemote.Caption:='Remote -> my clipboard';
   FMenuClipFromRemote.OnClick:=@ClipboardMenuClick; FMenuClipboard.Add(FMenuClipFromRemote);
   RebuildMonitorMenu;
 
   FTop := TPanel.Create(Self);
   FTop.Parent := Self;
-  // Le panneau NE doit pas changer la geometrie du bureau distant.
-  // alTop reduirait la surface du bureau au lieu de superposer les commandes.
+  // The panel must NOT change the remote desktop geometry.
+  // alTop would shrink the desktop area instead of overlaying controls.
   FTop.Align := alNone;
   FTop.SetBounds(0, 0, 1020, 186);
   FTop.BevelOuter := bvNone;
@@ -308,7 +308,7 @@ begin
   L := TLabel.Create(Self);
   L.Parent := FTop;
   L.SetBounds(12, 6, 95, 17);
-  L.Caption := 'Hote / IP';
+  L.Caption := 'Host / IP';
 
   FHost := TEdit.Create(Self);
   FHost.Parent := FTop;
@@ -328,7 +328,7 @@ begin
   L := TLabel.Create(Self);
   L.Parent := FTop;
   L.SetBounds(271, 6, 140, 17);
-  L.Caption := 'Jeton de connexion';
+  L.Caption := 'Connection token';
 
   FToken := TEdit.Create(Self);
   FToken.Parent := FTop;
@@ -344,58 +344,58 @@ begin
   FConnect := TButton.Create(Self);
   FConnect.Parent := FTop;
   FConnect.SetBounds(503, 23, 102, 29);
-  FConnect.Caption := 'Connecter';
+  FConnect.Caption := 'Connect';
   FConnect.OnClick := @ConnectClick;
 
   FDisconnect := TButton.Create(Self);
   FDisconnect.Parent := FTop;
   FDisconnect.SetBounds(613, 23, 110, 29);
-  FDisconnect.Caption := 'Deconnecter';
+  FDisconnect.Caption := 'Disconnect';
   FDisconnect.Enabled := False;
   FDisconnect.OnClick := @DisconnectClick;
 
   FControl := TCheckBox.Create(Self);
   FControl.Parent := FTop;
   FControl.SetBounds(735, 28, 240, 24);
-  FControl.Caption := 'Autoriser mon controle';
+  FControl.Caption := 'Allow me to control';
   FControl.Enabled := False;
   FControl.Checked := False;
 
   FStatus := TLabel.Create(Self);
   FStatus.Parent := FTop;
   FStatus.SetBounds(12, 66, 730, 19);
-  FStatus.Caption := 'Non connecte | affichage adapte a la fenetre';
+  FStatus.Caption := 'Disconnected | fit to window';
 
   FRefresh := TButton.Create(Self);
   FRefresh.Parent := FTop;
   FRefresh.SetBounds(894, 61, 120, 28);
-  FRefresh.Caption := 'Rafraichir';
+  FRefresh.Caption := 'Refresh';
   FRefresh.Enabled := False;
   FRefresh.OnClick := @RefreshClick;
 
   FText := TButton.Create(Self);
   FText.Parent := FTop; FText.SetBounds(756,61,130,28);
-  FText.Caption := 'Texte / IME'; FText.Enabled := False;
+  FText.Caption := 'Text / IME'; FText.Enabled := False;
   FText.OnClick := @TextClick;
 
   FRemoteKeys:=TCheckBox.Create(Self);
   FRemoteKeys.Parent:=FTop; FRemoteKeys.SetBounds(12,96,600,22);
-  FRemoteKeys.Caption:='Mode touches physiques (sinon automatique Unicode)';
+  FRemoteKeys.Caption:='Physical key mode (otherwise automatic Unicode)';
 
   FClipToRemote:=TCheckBox.Create(Self);
   FClipToRemote.Parent:=FTop; FClipToRemote.SetBounds(12,126,470,24);
-  FClipToRemote.Caption:='Mon presse-papiers -> distant';
+  FClipToRemote.Caption:='My clipboard -> remote';
   FClipToRemote.Checked:=False; FClipToRemote.Enabled:=False;
-  FClipToRemote.Hint:='Synchroniser le texte courant puis les nouvelles copies (64 Kio max). Controle requis.';
+  FClipToRemote.Hint:='Sync the current text and future copies (64 KiB max). Control required.';
   FClipToRemote.ShowHint:=True;
   FClipFromRemote:=TCheckBox.Create(Self);
   FClipFromRemote.Parent:=FTop; FClipFromRemote.SetBounds(510,126,490,24);
-  FClipFromRemote.Caption:='Distant -> mon presse-papiers';
+  FClipFromRemote.Caption:='Remote -> my clipboard';
   FClipFromRemote.Checked:=False; FClipFromRemote.Enabled:=False;
-  FClipFromRemote.Hint:='Autoriser le bureau distant a remplacer mon presse-papiers texte. Controle requis.';
+  FClipFromRemote.Hint:='Allow the remote desktop to replace my text clipboard. Control required.';
   FClipFromRemote.ShowHint:=True;
   L:=TLabel.Create(Self); L.Parent:=FTop; L.SetBounds(12,156,980,20);
-  L.Caption:='Presse-papiers : texte Unicode uniquement. Deux sens independants, desactives a chaque connexion.';
+  L.Caption:='Clipboard: Unicode text only. Both directions are independent and reset for each connection.';
 
 
   FView := TPaintBox.Create(Self);
@@ -448,10 +448,10 @@ end;
 
 procedure TKvmViewForm.SetStatus(const TextA: string);
 begin
-  // Le statut reste lisible dans le titre, y compris quand le menu est masque en plein ecran.
+  // Status remains readable in the title even when the menu is hidden in full screen.
   if FStatus.Caption <> TextA then
     KvmClientLog('[client-status] ' + TextA);
-  Caption := 'LazDesk | ' + Copy(TextA, 1, 80) + ' | F11 plein ecran';
+  Caption := 'LazDesk | ' + Copy(TextA, 1, 80) + ' | F11 full screen';
   FStatus.Caption := TextA;
   FStatus.Hint := TextA + LineEnding + 'Journal : ' + KvmClientLogPath;
   FStatus.ShowHint := True;
@@ -459,7 +459,7 @@ end;
 
 procedure TKvmViewForm.LayoutOverlay;
 begin
-  // Aucun panneau flottant : toute l'interface est dans la barre de menus.
+  // No floating panel: the entire interface lives in the menu bar.
 end;
 
 procedure TKvmViewForm.WindowResized(Sender: TObject);
@@ -533,13 +533,13 @@ begin
   if Length(FRemoteMonitors)=0 then
   begin
     Item:=TMenuItem.Create(FMainMenu);
-    Item.Caption:='Aucun moniteur distant'; Item.Enabled:=False;
+    Item.Caption:='No remote monitors'; Item.Enabled:=False;
     FMenuMonitors.Add(Item);
     FMenuMonitors.Enabled:=False;
     Exit;
   end;
   Item:=TMenuItem.Create(FMainMenu);
-  Item.Caption:='Tous les moniteurs'; Item.Tag:=-1;
+  Item.Caption:='All monitors'; Item.Tag:=-1;
   Item.OnClick:=@MonitorMenuClick; FMenuMonitors.Add(Item);
   if Length(FRemoteMonitors)>1 then
   begin
@@ -549,7 +549,7 @@ begin
   for I:=0 to High(FRemoteMonitors) do
   begin
     Item:=TMenuItem.Create(FMainMenu);
-    Item.Caption:=Format('Moniteur %d  -  %dx%d',[I+1,FRemoteMonitors[I].W,FRemoteMonitors[I].H]);
+    Item.Caption:=Format('Monitor %d  -  %dx%d',[I+1,FRemoteMonitors[I].W,FRemoteMonitors[I].H]);
     Item.Tag:=I; Item.OnClick:=@MonitorMenuClick;
     FMenuMonitors.Add(Item);
   end;
@@ -589,7 +589,7 @@ begin
   begin
     if FRemoteMonitorSelected[Index] and (SelectedRemoteMonitorCount<=1) then
     begin
-      SetStatus('Au moins un moniteur distant doit rester affiche.');
+      SetStatus('At least one remote monitor must remain visible.');
       SyncMonitorMenu;
       Exit;
     end;
@@ -623,21 +623,21 @@ begin
   if FSocket<>nil then Exit;
   Dlg:=TForm.CreateNew(Self,1);
   try
-    Dlg.Caption:='Parametres de connexion';
+    Dlg.Caption:='Connection settings';
     Dlg.Width:=470; Dlg.Height:=270; Dlg.Position:=poOwnerFormCenter;
     Dlg.BorderStyle:=bsDialog;
-    L:=TLabel.Create(Dlg); L.Parent:=Dlg; L.SetBounds(16,18,100,18); L.Caption:='Hote / IP';
+    L:=TLabel.Create(Dlg); L.Parent:=Dlg; L.SetBounds(16,18,100,18); L.Caption:='Host / IP';
     HostEdit:=TEdit.Create(Dlg); HostEdit.Parent:=Dlg; HostEdit.SetBounds(145,14,290,26); HostEdit.Text:=FHost.Text;
     L:=TLabel.Create(Dlg); L.Parent:=Dlg; L.SetBounds(16,58,100,18); L.Caption:='Port';
     PortEdit:=TEdit.Create(Dlg); PortEdit.Parent:=Dlg; PortEdit.SetBounds(145,54,100,26); PortEdit.Text:=FPort.Text;
-    L:=TLabel.Create(Dlg); L.Parent:=Dlg; L.SetBounds(16,98,120,18); L.Caption:='Jeton';
+    L:=TLabel.Create(Dlg); L.Parent:=Dlg; L.SetBounds(16,98,120,18); L.Caption:='Token';
     TokenEdit:=TEdit.Create(Dlg); TokenEdit.Parent:=Dlg; TokenEdit.SetBounds(145,94,290,26);
     TokenEdit.Text:=FToken.Text; TokenEdit.PasswordChar:='*';
     TlsCheck:=TCheckBox.Create(Dlg); TlsCheck.Parent:=Dlg; TlsCheck.SetBounds(145,134,180,24);
     TlsCheck.Caption:='WSS / TLS'; TlsCheck.Checked:=FTls.Checked;
-    OkBtn:=TButton.Create(Dlg); OkBtn.Parent:=Dlg; OkBtn.Caption:='Enregistrer'; OkBtn.ModalResult:=mrOk;
+    OkBtn:=TButton.Create(Dlg); OkBtn.Parent:=Dlg; OkBtn.Caption:='Save'; OkBtn.ModalResult:=mrOk;
     OkBtn.SetBounds(235,188,96,30);
-    CancelBtn:=TButton.Create(Dlg); CancelBtn.Parent:=Dlg; CancelBtn.Caption:='Annuler'; CancelBtn.ModalResult:=mrCancel;
+    CancelBtn:=TButton.Create(Dlg); CancelBtn.Parent:=Dlg; CancelBtn.Caption:='Cancel'; CancelBtn.ModalResult:=mrCancel;
     CancelBtn.SetBounds(339,188,96,30);
     if Dlg.ShowModal<>mrOk then Exit;
     FHost.Text:=Trim(HostEdit.Text); FPort.Text:=Trim(PortEdit.Text);
@@ -705,7 +705,7 @@ begin
   begin FMenuClipFromRemote.Enabled:=FClipFromRemote.Enabled; FMenuClipFromRemote.Checked:=FClipFromRemote.Checked; end;
   if FMenuClipboard<>nil then FMenuClipboard.Enabled:=FClipToRemote.Enabled or FClipFromRemote.Enabled;
   SyncMonitorMenu;
-  // Comme Firefox, la barre de menus native disparait en plein ecran.
+  // As in Firefox, the native menu bar disappears in full-screen mode.
   if FMainMenu<>nil then
     if FFullScreenMode then Menu:=nil else Menu:=FMainMenu;
 end;
@@ -846,7 +846,7 @@ begin
 
   // Multi-monitor display is independent from fullscreen. With two or more
   // selected remote monitors, span the corresponding local work areas while
-  // keeping ordinary window chrome. Fullscreen is explicit (F11 / Affichage).
+  // keeping ordinary window chrome. Fullscreen is explicit (F11 / View).
   WantSpan:=(SelectedCount>1) and (Screen<>nil) and (Screen.MonitorCount>1);
   WantSpecial:=WantSpan or FFullScreenMode;
   WasSpecial:=FSpanningMonitors or FRestoreValid;
@@ -873,10 +873,10 @@ begin
       SetBounds(SpanRect.Left,SpanRect.Top,SpanRect.Right-SpanRect.Left,
         SpanRect.Bottom-SpanRect.Top);
       if FFullScreenMode then
-        KvmClientLog(Format('[client-layout] plein ecran sur %d ecran(s) locaux pour %d moniteur(s) distant(s)',
+        KvmClientLog(Format('[client-layout] full screen across %d local display(s) for %d remote monitor(s)',
           [SpanCount,SelectedCount]))
       else
-        KvmClientLog(Format('[client-layout] fenetre etendue sur %d ecran(s) locaux pour %d moniteur(s) distant(s)',
+        KvmClientLog(Format('[client-layout] window extended across %d local display(s) for %d remote monitor(s)',
           [SpanCount,SelectedCount]));
       end;
     end;
@@ -899,7 +899,7 @@ begin
       R:=Screen.Monitors[TargetMonitor].BoundsRect;
       WindowState:=wsNormal; BorderStyle:=bsNone; Position:=poDesigned;
       SetBounds(R.Left,R.Top,R.Right-R.Left,R.Bottom-R.Top);
-      KvmClientLog(Format('[client-layout] plein ecran explicite sur moniteur local %d',[TargetMonitor+1]));
+      KvmClientLog(Format('[client-layout] explicit full screen on local monitor %d',[TargetMonitor+1]));
     end
     else
     begin
@@ -939,7 +939,7 @@ begin
       begin
         WindowState:=wsNormal; BorderStyle:=bsSizeable; Position:=poScreenCenter;
         ClientWidth:=Max(640,RemoteW); ClientHeight:=Max(480,RemoteH);
-        KvmClientLog(Format('[client-layout] moniteur distant %dx%d affiche a 100%% sans maximisation',
+        KvmClientLog(Format('[client-layout] remote monitor %dx%d displayed at 100%% without maximization',
           [RemoteW,RemoteH]));
       end
       else if not Restored then
@@ -1120,8 +1120,8 @@ begin
   if FClipboardChanging then Exit;
   SyncClipboardOptions;
   if not ControlAllowed then Exit;
-  SetStatus('Presse-papiers : local -> distant='+BoolToStr(FClipToRemote.Checked,True)+
-    ' ; distant -> local='+BoolToStr(FClipFromRemote.Checked,True));
+  SetStatus('Clipboard: local -> remote='+BoolToStr(FClipToRemote.Checked,True)+
+    '; remote -> local='+BoolToStr(FClipFromRemote.Checked,True));
 end;
 
 procedure TKvmViewForm.StopVideoWorker;
@@ -1219,27 +1219,27 @@ begin
   if (PortNum < 1) or (PortNum > 65535) or
      (Trim(FHost.Text) = '') or not ValidKvmToken(FToken.Text) then
   begin
-    MessageDlg('Saisir un hote, un port valide et un jeton ASCII sans espace (16..256 caracteres).',
+    MessageDlg('Enter a host, a valid port, and an ASCII token without spaces (16..256 characters).',
       mtWarning, [mbOK], 0);
     Exit;
   end;
 
   if not FTls.Checked and not FAllowInsecure and not KvmLoopbackHost(FHost.Text) then
   begin
-    SetStatus('TLS requis hors loopback. --allow-insecure uniquement pour un tunnel/VPN de confiance.');
+    SetStatus('TLS is required outside loopback. Use --allow-insecure only with a trusted tunnel/VPN.');
     Exit;
   end;
   FAutoControlPending := FAutoControl;
-  SetStatus('Connexion en cours...');
+  SetStatus('Connecting...');
   FConnect.Enabled := False;
   SyncMainMenu;
-  // Reutiliser les options TLS pour le chemin mORMot2 donnant le code
-  // HTTP d'echec (l'ancien overload effacait ce diagnostic).
+  // Reuse TLS options for the mORMot2 path that reports the HTTP
+  // error code (the previous overload discarded that diagnostic).
   if FTls.Checked then
   begin
     if (FTlsCaFile<>'') and not FileExists(FTlsCaFile) then
     begin
-      SetStatus('Fichier CA TLS introuvable : ' + FTlsCaFile);
+      SetStatus('TLS CA file not found: ' + FTlsCaFile);
       FConnect.Enabled := True;
       SyncMainMenu;
       Exit;
@@ -1247,8 +1247,8 @@ begin
     PrepareClientTls(FTlsCaFile,TLSContext);
   end;
 
-  // Configuration identique au chemin historique, mais avec un diagnostic
-  // d'echec de negotiation (HTTP 400, 404, 429, erreur TLS, etc.).
+  // Same setup as before, but with diagnostics for
+  // failed negotiation (HTTP 400, 404, 429, TLS errors, etc.).
   ConnectOptions.InitDefault;
   ConnectOptions.Proxy := 'none';
   ConnectOptions.CreateTimeoutMS := 10000;
@@ -1257,7 +1257,7 @@ begin
   if not TargetURI.FromScheme(WS_SCHEME[FTls.Checked],
       RawUtf8(FHost.Text), RawUtf8(FPort.Text), KVM_WS_PATH) then
   begin
-    SetStatus('Adresse WebSocket invalide.');
+    SetStatus('Invalid WebSocket address.');
     FConnect.Enabled := True;
     SyncMainMenu;
     Exit;
@@ -1267,18 +1267,18 @@ begin
     Capability:='jpeg';
     if FDecoder.H264Available then Capability:='h264';
     if FDecoder.NativeAvailable then
-      KvmClientLog('[client-video] TurboJPEG sur worker; ACK apres composition CPU')
-    else KvmClientLog('[client-video] Repli FCL JPEG sur worker (aucun decodage GUI)');
+      KvmClientLog('[client-video] TurboJPEG on worker; ACK after CPU composition')
+    else KvmClientLog('[client-video] Fallback to FCL JPEG worker (no GUI decoding)');
     Proto := TWebSocketProtocolChat.Create(KVM_SUBPROTOCOL, KVM_WS_PATH,
       @IncomingFrame);
-    // La methode mORMot2 gere la destruction de Proto, y compris en echec.
+    // mORMot2 handles Proto destruction, including on failure.
     ConnectError := '';
     FSocket := THttpClientWebSockets.WebSocketsConnect(
       TargetURI, ConnectOptions, Proto, nil, '', '', @ConnectError);
     if FSocket = nil then
     begin
-      if ConnectError = '' then ConnectError := 'aucune reponse du serveur';
-      raise Exception.Create('Echec WebSocket ' + string(ConnectError));
+      if ConnectError = '' then ConnectError := 'no response from server';
+      raise Exception.Create('WebSocket failed: ' + string(ConnectError));
     end;
 
     Frame.opcode := focText;
@@ -1289,7 +1289,7 @@ begin
     FSocket.WebSockets.Settings^.ClientAutoUpgrade := False; // require a fresh AUTH
     Frame.payload := 'AUTH ' + RawByteString(AnsiString(FToken.Text))+' '+Capability;
     if not FSocket.WebSockets.SendFrame(Frame) then
-      raise Exception.Create('Impossible d''envoyer le jeton.');
+      raise Exception.Create('Could not send the token.');
 
     FClipboardWorker:=TKvmClipboardClientWorker.Create(@CreateClipboardBackend,@DecodeReply);
     FDisconnect.Enabled := True;
@@ -1298,12 +1298,12 @@ begin
     FPort.Enabled := False;
     FToken.Enabled := False;
     FTls.Enabled := False;
-    SetStatus('Socket ouvert ; authentification en cours...');
+    SetStatus('Socket open; authenticating...');
   except
     on E: Exception do
     begin
       CloseSocket;
-      SetStatus('Echec de connexion : ' + E.Message);
+      SetStatus('Connection failed: ' + E.Message);
     end;
   end;
 end;
@@ -1311,7 +1311,7 @@ end;
 procedure TKvmViewForm.DisconnectClick(Sender: TObject);
 begin
   CloseSocket;
-  SetStatus('Deconnecte');
+  SetStatus('Disconnected');
   FView.Invalidate;
 end;
 
@@ -1330,13 +1330,13 @@ begin
   begin
     FControlGranted := False;
     SendPacket('G'); // Request exclusive control from the SERVER.
-    SetStatus('Demande du controle exclusif au serveur...');
+    SetStatus('Requesting exclusive control from server...');
   end
   else
   begin
     FControlGranted := False;
     SendPacket('L'); // Server releases all held inputs on relinquish.
-    SetStatus('Visualisation uniquement : controle libere.');
+    SetStatus('View only: control released.');
   end;
   SyncViewCursor;
   SyncMainMenu;
@@ -1406,12 +1406,12 @@ begin
     {$IFDEF WINDOWS}if FWinPresenter<>nil then FWinPresenter.ClearCursor;{$ENDIF}
     SyncViewCursor;
     FInputs.CancelQueued;
-    SetStatus(DesktopStateText(Reason)+'. Controle retire.');
+    SetStatus(DesktopStateText(Reason)+'. Control revoked.');
   end;
   if Available then
   begin
     FControl.Enabled := FAuthorized and FRemoteControl;
-    SetStatus('Bureau disponible. Redemander le controle si necessaire.');
+    SetStatus('Desktop available. Request control again if needed.');
   end;
   SyncClipboardOptions;
   FView.Invalidate;
@@ -1425,14 +1425,14 @@ begin
   // A commit is not an IME event stream or a clipboard synchronization.
   SendPacket('Z'); ResetLocalInputs;
   Value := '';
-  if not InputQuery('Saisie de texte', 'Texte valide par votre methode de saisie (256 caracteres maximum)', Value) then Exit;
+  if not InputQuery('Text input', 'Text entered using your input method (256 characters max)', Value) then Exit;
   // Lazarus LCL strings are already UTF-8. Copy their bytes without an
   // intermediate AnsiString code-page conversion.
   SetLength(Utf8Bytes,Length(Value));
   if Length(Value)>0 then Move(Value[1],Utf8Bytes[1],Length(Value));
   Packet := MakeTextUtf8(Utf8Bytes);
   if Packet = '' then
-    SetStatus('Texte refuse : limite 256 points Unicode / 1024 octets, sans controles.')
+    SetStatus('Text rejected: limit 256 Unicode code points / 1024 bytes, no control characters.')
   else if ControlAllowed then SendPacket(Packet);
 end;
 
@@ -1463,10 +1463,10 @@ begin
           if Length(Frame.payload) >= 2 then
             TextMsg := 'CLOSED ' + IntToStr(Ord(Frame.payload[1])*256 + Ord(Frame.payload[2]))
           else
-            TextMsg := 'CLOSED (sans code)';
+            TextMsg := 'CLOSED (no code)';
         end
         else if Length(Frame.payload) <= 512 then TextMsg := string(AnsiString(Frame.payload))
-        else TextMsg := 'LOCAL PROTOCOL: reponse texte trop longue (' + IntToStr(Length(Frame.payload)) + ' octets)';
+        else TextMsg := 'LOCAL PROTOCOL: text response too long (' + IntToStr(Length(Frame.payload)) + ' octets)';
         EnterCriticalSection(FLock);
         try
           N := Length(FPendingTexts);
@@ -1627,7 +1627,7 @@ begin
 
   if (FFront.Surface.Width<>Snapshot.Surface.Width) or
      (FFront.Surface.Height<>Snapshot.Surface.Height) then
-    SetStatus(Format('Bureau distant : %d x %d | worker video',
+    SetStatus(Format('Remote desktop: %d x %d | video worker',
       [Snapshot.Surface.Width,Snapshot.Surface.Height]));
 
   OldOverlayVisible:=FRemoteCursorOverlay and FCursorVisible;
@@ -1685,7 +1685,7 @@ begin
   if FUseRawImage then
   begin
     if (FWinPresenter=nil) or not FWinPresenter.Update(FFront.Surface,Damage) then
-      raise Exception.Create('Mise a jour DIB Windows impossible');
+      raise Exception.Create('Failed to update Windows DIB');
   end
   else
   {$ENDIF}
@@ -1720,14 +1720,14 @@ begin
   try
     if FTransportFault then
     begin
-      CloseSocket; SetStatus('Envoi reseau interrompu : aucune saisie rejouee.'); Exit;
+      CloseSocket; SetStatus('Network send interrupted: input will not be replayed.'); Exit;
     end;
     if FAutoConnect then begin FAutoConnect:=False; ConnectClick(nil); end;
     HasSnapshot:=False; FatalError:='';
     EnterCriticalSection(FLock);
     try
       TextMsgs:=FPendingTexts; FPendingTexts:=nil;
-      if FWorkerFault then FatalError:='Echange reseau interrompu ou reponse presse-papiers invalide';
+      if FWorkerFault then FatalError:='Network communication interrupted or invalid clipboard reply';
     finally LeaveCriticalSection(FLock); end;
     if FatalError<>'' then
     begin CloseSocket; SetStatus(FatalError); Exit; end;
@@ -1740,7 +1740,7 @@ begin
       FRemoteControl := True;
       FControl.Enabled := not FDesktopPaused;
       FRefresh.Enabled := True;
-      SetStatus('Connecte | controle possible.');
+      SetStatus('Connected | control available.');
       SyncMainMenu;
     end
     else if TextMsg = 'OK VIEW' then
@@ -1749,14 +1749,14 @@ begin
       FRemoteControl := False;
       FControl.Enabled := False;
       FRefresh.Enabled := True;
-      SetStatus('Connecte | visualisation seule.');
+      SetStatus('Connected | view only.');
       SyncMainMenu;
     end
     else if TextMsg = 'CTRL GRANTED' then
     begin
       FControlGranted := not FDesktopPaused;
       FText.Enabled := FControlGranted;
-      SetStatus('Controle EXCLUSIF accorde : cliquer dans le bureau.');
+      SetStatus('EXCLUSIVE control granted: click inside the desktop.');
     end
     else if TextMsg = 'CTRL BUSY' then
     begin
@@ -1764,7 +1764,7 @@ begin
       FText.Enabled := False;
       FControl.Checked := False;
       ResetLocalInputs;
-      SetStatus('Controle occupe par un autre client.');
+      SetStatus('Another client currently controls the desktop.');
     end
     else if TextMsg = 'CTRL RELEASED' then
     begin
@@ -1775,7 +1775,7 @@ begin
     else if Copy(TextMsg,1,15) = 'MONITOR_LAYOUT ' then
       ParseMonitorLayout(TextMsg)
     else if TextMsg = 'ERR INPUT' then
-      SetStatus('Saisie non prise en charge ou refusee par le systeme distant. Le texte peut etre partiel.')
+      SetStatus('Input unsupported or rejected by the remote system. Text may be incomplete.')
     else if (TextMsg = 'ERR AUTH') or (TextMsg = 'ERR LIMIT') or
             (Copy(TextMsg,1,6) = 'CLOSED') or (TextMsg = 'ERR TIMEOUT') or
             (TextMsg = 'ERR PROTOCOL') or (Copy(TextMsg,1,15) = 'LOCAL PROTOCOL:') then
@@ -1786,13 +1786,13 @@ begin
       if TextMsg = 'ERR AUTH' then
         SetStatus('Authentification refusee')
       else if TextMsg = 'ERR LIMIT' then
-        SetStatus('Nombre maximal de clients atteint')
+        SetStatus('Maximum number of clients reached')
       else if TextMsg = 'ERR TIMEOUT' then
-        SetStatus('Session terminee : timeout signale par le serveur')
+        SetStatus('Session ended: server reported a timeout')
       else if TextMsg = 'ERR PROTOCOL' then
-        SetStatus('Erreur de protocole signalee par le serveur')
+        SetStatus('Server reported a protocol error')
       else if Copy(TextMsg,1,15) = 'LOCAL PROTOCOL:' then
-        SetStatus('Erreur LOCALE de reception : ' + Copy(TextMsg,17,200))
+        SetStatus('LOCAL receive error: ' + Copy(TextMsg,17,200))
       else
         SetStatus('WebSocket fermee : ' + TextMsg + ' (origine a determiner)');
       Exit;
@@ -1805,8 +1805,8 @@ begin
       FDecoder.DrainUI(Events,Snapshot,HasSnapshot,FatalError);
     if FatalError<>'' then
     begin
-      KvmClientLog('[client-video] erreur worker: '+FatalError);
-      CloseSocket; SetStatus('Erreur video : '+FatalError); Exit;
+      KvmClientLog('[client-video] worker error: '+FatalError);
+      CloseSocket; SetStatus('Video error: '+FatalError); Exit;
     end;
     // Desktop transitions and input receipts are never coalesced/dropped.
     for I:=0 to High(Events) do
@@ -1814,13 +1814,13 @@ begin
         'D':
           if ReadDesktopState(Events[I],Available,Reason,Epoch) then
             ApplyDesktopState(Available,Reason,Epoch)
-          else begin CloseSocket; SetStatus('Etat de session invalide'); Exit; end;
+          else begin CloseSocket; SetStatus('Invalid session state'); Exit; end;
         'I':
           begin
             if not FInputs.Receipt(Events[I],InputStatus,Applied) then
-            begin CloseSocket; SetStatus('Accuse de saisie invalide'); Exit; end;
+            begin CloseSocket; SetStatus('Invalid input acknowledgment'); Exit; end;
             if InputStatus=KVM_INPUT_STALE then
-            begin CloseSocket; SetStatus('Sequence de saisie desynchronisee'); Exit; end;
+            begin CloseSocket; SetStatus('Input sequence out of sync'); Exit; end;
             if InputStatus<>KVM_INPUT_OK then
             begin
               FInputs.CancelQueued;
@@ -1830,7 +1830,7 @@ begin
               // have changed modifier state and therefore still releases control.
               if InputStatus=KVM_INPUT_PARTIAL then
               begin TransmitPacket('Z'); ResetLocalInputs; end;
-              SetStatus(Format('Saisie refusee/partielle (%d, %d points)',[InputStatus,Applied]));
+              SetStatus(Format('Input rejected/partial (%d, %d code points)',[InputStatus,Applied]));
             end;
             DrainInputs;
           end;
@@ -1851,7 +1851,7 @@ begin
     if HasSnapshot then
       try PresentSnapshot(Snapshot);
       except on E: Exception do
-        begin CloseSocket; SetStatus('Affichage impossible : '+E.Message); Exit; end; end;
+        begin CloseSocket; SetStatus('Display failed: '+E.Message); Exit; end; end;
     if FPendingMouseMove and ControlAllowed and
        (GetTickCount64-FLastMouseTick>=KVM_MOUSE_INTERVAL_MS) then
     begin
@@ -1859,7 +1859,7 @@ begin
       SendPacket(MakeMouse(0,0,FPendingMouseX,FPendingMouseY));
     end;
     if FInputs.TimedOut(GetTickCount64) then
-    begin CloseSocket; SetStatus('Accuse de saisie absent : aucun renvoi'); Exit; end;
+    begin CloseSocket; SetStatus('Input acknowledgment missing: no retransmission'); Exit; end;
     if GetTickCount64-FLastHeartbeat>=3000 then
     begin FLastHeartbeat:=GetTickCount64; SendPacket('P'); end;
     NowTick:=GetTickCount64;
@@ -1914,7 +1914,7 @@ begin
   if (FFront.Surface.Width<1) or (FFront.Surface.Height<1) then
   begin
     FView.Canvas.Font.Color:=clWhite;
-    FView.Canvas.TextOut(20,20,'En attente du bureau distant...');
+    FView.Canvas.TextOut(20,20,'Waiting for remote desktop...');
     Exit;
   end;
   if not BuildDisplayLayout(Items) then Exit;
@@ -1930,7 +1930,7 @@ begin
         Item.DestRect.Right-Item.DestRect.Left,Item.DestRect.Bottom-Item.DestRect.Top,
         Item.SourceRect.Left,Item.SourceRect.Top,
         Item.SourceRect.Right-Item.SourceRect.Left,Item.SourceRect.Bottom-Item.SourceRect.Top) then
-        KvmClientLog('[client-video] Echec DIB region Windows');
+        KvmClientLog('[client-video] Windows DIB region failed');
     end
     else
     {$ENDIF}
@@ -2047,10 +2047,10 @@ begin
   // receipt-tracked X request (local U commits never leave this process).
   if not OutgoingInputPacketValid(Payload) then
   begin
-    KvmClientLog('[client-input] paquet sortant invalide bloque avant WebSocket (type='+
+    KvmClientLog('[client-input] invalid outgoing packet blocked before WebSocket (type='+
       IntToStr(Ord(Payload[1]))+', longueur='+IntToStr(Length(Payload))+')');
     if Payload[1]='X' then FInputs.Reset;
-    SetStatus('Saisie locale invalide bloquee avant envoi.');
+    SetStatus('Invalid local input blocked before sending.');
     Exit;
   end;
   Frame.opcode := focBinary;
@@ -2081,7 +2081,7 @@ begin
     if not FInputs.Push(Payload) then
     begin
       FInputs.CancelQueued; TransmitPacket('Z'); ResetLocalInputs;
-      SetStatus('File de saisie pleine : entrees non transmises abandonnees, touches relachees.'); Exit;
+      SetStatus('Input queue full: unsent events discarded, keys released.'); Exit;
     end;
     DrainInputs;
   end
@@ -2102,9 +2102,9 @@ begin
   if FAuthorized and FControlGranted then SendPacket('Z');
   ResetLocalInputs;
   if FRemoteKeys.Checked then
-    SetStatus('Touches physiques : la disposition et les methodes de saisie du bureau distant s appliquent.')
+    SetStatus('Physical keys: the remote desktop keyboard layout and input methods apply.')
   else
-    SetStatus('Mode automatique : texte Unicode compose localement, raccourcis et touches speciales transmis separement.');
+    SetStatus('Automatic mode: locally composed Unicode text; shortcuts and special keys sent separately.');
   SyncMainMenu;
 end;
 
@@ -2232,7 +2232,7 @@ procedure TKvmViewForm.RemoteKeyDown(Sender: TObject;
 var
   Shortcut: Boolean;
 begin
-  // F11 appartient au CLIENT pour le plein ecran; les autres touches fonction restent distantes.
+  // F11 is reserved by the CLIENT for full screen; other function keys go to the remote host.
   if Key = VK_F11 then
   begin
     ToggleFullScreen;

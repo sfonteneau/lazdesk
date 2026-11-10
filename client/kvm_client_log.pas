@@ -4,8 +4,8 @@ unit kvm_client_log;
 
 interface
 
-// Journal du client graphique, utilisable sous Windows (SUBSYSTEM:WINDOWS)
-// sans StdOut. Le logger n'expose jamais les identifiants de connexion.
+// GUI client log, usable on Windows (SUBSYSTEM:WINDOWS)
+// without StdOut. The logger never discloses connection credentials.
 procedure KvmClientLog(const MessageText: string);
 function KvmClientLogPath: string;
 
@@ -29,7 +29,7 @@ var
   Line: UTF8String;
   LogDir: string;
 begin
-  // Ne jamais bloquer ni faire planter un client KVM pour un journal inaccessible.
+  // Never block or crash the KVM client because the log file is unavailable.
   try
     EnterCriticalSection(GLogLock);
     try
@@ -54,7 +54,7 @@ begin
       LeaveCriticalSection(GLogLock);
     end;
   except
-    // Ecriture best-effort : les erreurs de disque ne ferment pas la session.
+    // Best-effort writes: disk errors do not terminate the session.
   end;
 end;
 

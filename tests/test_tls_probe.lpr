@@ -12,7 +12,7 @@ begin
     P:=TWebSocketProtocolChat.Create(KVM_SUBPROTOCOL,KVM_WS_PATH,nil);
     C:=THttpClientWebSockets.WebSocketsConnect(RawUtf8(ParamStr(1)),RawUtf8(ParamStr(2)),P,
       nil,'',KVM_WS_PATH,'',True,@TLS);
-    if C=nil then raise Exception.Create('TLS/upgrade refuse');
+    if C=nil then raise Exception.Create('TLS/upgrade rejected');
     WriteLn('TLS_ACCEPTED');
   except on E: Exception do begin WriteLn('TLS_REJECTED: ',E.Message); ExitCode:=1; end; end;
   C.Free;

@@ -90,7 +90,7 @@ begin
   Result := nil;
   {$IFDEF WINDOWS}
   EnableDpiAwareness;
-  SetLength(Result, 1); Result[0].Name := 'Bureau virtuel complet';
+  SetLength(Result, 1); Result[0].Name := 'Entire virtual desktop';
   Result[0].NativeID := 0;
   Result[0].Bounds.X := GetSystemMetrics(SM_XVIRTUALSCREEN);
   Result[0].Bounds.Y := GetSystemMetrics(SM_YVIRTUALSCREEN);
@@ -105,7 +105,7 @@ begin
     if D = nil then Exit;
     Screen := XDefaultScreen(D);
     if XGetWindowAttributes(D, XRootWindow(D, Screen), A) = 0 then Exit;
-    SetLength(Result, 1); Result[0].Name := 'Bureau X11 complet';
+    SetLength(Result, 1); Result[0].Name := 'Entire X11 desktop';
     Result[0].NativeID := 0;
     Result[0].Bounds.X := 0; Result[0].Bounds.Y := 0;
     Result[0].Bounds.W := A.width; Result[0].Bounds.H := A.height;
@@ -129,7 +129,7 @@ begin
         for I := 0 to N - 1 do
         begin
           Result[I+1].NativeID := Infos[I].Name;
-          Result[I+1].Name := 'Moniteur XRandR ' + IntToStr(Infos[I].Name);
+          Result[I+1].Name := 'XRandR monitor ' + IntToStr(Infos[I].Name);
           Result[I+1].Bounds.X := Infos[I].X; Result[I+1].Bounds.Y := Infos[I].Y;
           Result[I+1].Bounds.W := Infos[I].W; Result[I+1].Bounds.H := Infos[I].H;
           Result[I+1].PixelW := Infos[I].W; Result[I+1].PixelH := Infos[I].H;
@@ -146,8 +146,8 @@ begin
   begin
     if I = 0 then Result[I].NativeID := CGMainDisplayID
     else Result[I].NativeID := IDs[I-1];
-    Result[I].Name := 'Ecran macOS ' + IntToStr(Result[I].NativeID);
-    if I = 0 then Result[I].Name := 'Ecran principal';
+    Result[I].Name := 'macOS display ' + IntToStr(Result[I].NativeID);
+    if I = 0 then Result[I].Name := 'Primary display';
     R := CGDisplayBounds(Result[I].NativeID);
     Result[I].Bounds.X := Round(R.Origin.X); Result[I].Bounds.Y := Round(R.Origin.Y);
     Result[I].Bounds.W := Round(R.Size.Width); Result[I].Bounds.H := Round(R.Size.Height);
@@ -163,7 +163,7 @@ begin
   Result := (Index >= 0) and (Index < Length(A));
   if Result then Result := BoundsValid(A[Index].Bounds);
   if not Result then
-  begin ErrorText := 'Moniteur absent. Utiliser --list-monitors.'; Exit; end;
+  begin ErrorText := 'Monitor not found. Use --list-monitors.'; Exit; end;
   EnterCriticalSection(Guard);
   try
     Selected := A[Index]; SelectionIndex := Index; SelectedID := Selected.NativeID;
@@ -252,7 +252,7 @@ procedure PrintMonitors;
 var A: TKvmMonitors; I: Integer;
 begin
   A := EnumerateMonitors;
-  if Length(A) = 0 then WriteLn('Aucun moniteur accessible.');
+  if Length(A) = 0 then WriteLn('No monitors available.');
   for I := 0 to High(A) do
     WriteLn(I, ': ', A[I].Name, ' ', A[I].PixelW, 'x', A[I].PixelH,
       ' origine ', A[I].Bounds.X, ',', A[I].Bounds.Y);

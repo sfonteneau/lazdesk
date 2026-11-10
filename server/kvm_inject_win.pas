@@ -336,7 +336,7 @@ begin
   if DenormalizePoint(M.Bounds, NX, NY, X, Y) then
   begin
     if not SendAbsoluteMouseMove(X,Y) and (Action <> 2) then
-      raise Exception.Create('Windows refuse le mouvement du pointeur.');
+      raise Exception.Create('Windows rejected pointer movement.');
   end
   else if Action <> 2 then Exit;
   if Action = 0 then Exit;
@@ -353,7 +353,7 @@ begin
   begin
     FillChar(TI,SizeOf(TI),0); TI._Type := INPUT_MOUSE; TI.mi.dwFlags := Flags;
     if KvmSendInput(1,@TI,SizeOf(TI)) <> 1 then
-      raise Exception.Create('Windows refuse le bouton de souris.');
+      raise Exception.Create('Windows rejected the mouse button event.');
   end;
 end;
 
@@ -388,11 +388,11 @@ begin
     KI.dwFlags := KVM_UNICODE_FLAG;
     TI.ki := KI;
     if KvmSendInput(1, @TI, SizeOf(TI)) <> 1 then
-      raise Exception.Create('Windows refuse la saisie Unicode (session ou privileges).');
+      raise Exception.Create('Windows rejected Unicode input (session or permissions).');
     KI.dwFlags := KVM_UNICODE_FLAG or KEYEVENTF_KEYUP;
     TI.ki := KI;
     if KvmSendInput(1, @TI, SizeOf(TI)) <> 1 then
-      raise Exception.Create('Windows refuse la saisie Unicode (session ou privileges).');
+      raise Exception.Create('Windows rejected Unicode input (session or permissions).');
   end;
 end;
 
@@ -406,7 +406,7 @@ begin
     TI.ki.dwFlags := KEYEVENTF_EXTENDEDKEY;
   if not Pressed then TI.ki.dwFlags := TI.ki.dwFlags or KEYEVENTF_KEYUP;
   if KvmSendInput(1, @TI, SizeOf(TI)) <> 1 then
-    raise Exception.Create('SendInput refuse (session ou privileges Windows).');
+    raise Exception.Create('SendInput rejected (Windows session or permissions).');
 end;
 
 procedure InjectWheel(Notches: SmallInt);
@@ -417,7 +417,7 @@ begin
   TI.mi.dwFlags := MOUSEEVENTF_WHEEL;
   TI.mi.mouseData := DWORD(LongInt(Notches) * WHEEL_DELTA);
   if KvmSendInput(1,@TI,SizeOf(TI)) <> 1 then
-    raise Exception.Create('Windows refuse la molette.');
+    raise Exception.Create('Windows rejected the mouse wheel event.');
 end;
 
 end.

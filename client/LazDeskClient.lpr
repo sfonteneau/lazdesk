@@ -12,8 +12,8 @@ var
   ErrorText: string;
   ShowHelp: Boolean;
 begin
-  KvmClientLog('[client] Demarrage LazDeskClient');
-  KvmClientLog('[client] Build : '+KvmBuildDescription);
+  KvmClientLog('[client] Starting LazDeskClient');
+  KvmClientLog('[client] Build: '+KvmBuildDescription);
   Application.Initialize;
   if not ParseClientOptions(Options, ErrorText, ShowHelp) then
   begin

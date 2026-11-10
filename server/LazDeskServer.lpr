@@ -36,7 +36,7 @@ end;
 begin
   if not ParseServerOptions(Options, ErrorText, ShowHelp) then
   begin
-    WriteLn('Erreur : ', ErrorText);
+    WriteLn('Error: ', ErrorText);
     WriteLn(ServerUsage);
     Halt(2);
   end;
@@ -47,68 +47,68 @@ begin
   end;
 
   if not ConfigureDesktop(Options, Reason) then
-  begin WriteLn('Erreur: ',Reason); Halt(2); end;
+  begin WriteLn('Error: ',Reason); Halt(2); end;
   if Options.ListMonitors then begin ListDesktopMonitors; Halt(0); end;
 
   WriteLn('LazDesk v9 / Lazarus + mORMot2');
   WriteLn('Build : ',KvmBuildDescription);
-  WriteLn('Moteur de bureau : ', DesktopBackendName);
+  WriteLn('Desktop backend: ', DesktopBackendName);
   if not DesktopBackendReady(Options.AllowControl, Reason) then
   begin
-    WriteLn('Capture/controle indisponible : ', Reason);
+    WriteLn('Capture/control unavailable: ', Reason);
     Halt(3);
   end;
   if not ConfigureDesktopMonitor(Options.Monitor, Reason) then
-  begin WriteLn('Capture indisponible : ', Reason); Halt(3); end;
+  begin WriteLn('Capture unavailable: ', Reason); Halt(3); end;
   if (Options.TLSCert <> '') and not FileExists(Options.TLSCert) then
   begin
-    WriteLn('Fichier de certificat TLS introuvable.');
+    WriteLn('TLS certificate file not found.');
     Halt(4);
   end;
   if (Options.TLSKey <> '') and not FileExists(Options.TLSKey) then
   begin
-    WriteLn('Fichier de cle TLS introuvable.');
+    WriteLn('TLS key file not found.');
     Halt(4);
   end;
   BindAddress := Options.Listen + ':' + IntToStr(Options.Port);
   if Options.Listen = '0.0.0.0' then
-    WriteLn('AVERTISSEMENT : ecoute sur toutes les interfaces reseau.');
+    WriteLn('WARNING: listening on all network interfaces.');
   Server := nil;
   try
     Server := TKvmServer.Create(Options);
     if Options.TLSCert <> '' then
-      WriteLn('Ecoute : wss://', BindAddress, '/kvm ; protocole lazdesk8')
+      WriteLn('Listening: wss://', BindAddress, '/kvm ; protocole lazdesk8')
     else
-      WriteLn('Ecoute : ws://', BindAddress, '/kvm ; protocole lazdesk8');
+      WriteLn('Listening: ws://', BindAddress, '/kvm ; protocole lazdesk8');
     if Options.FPS=0 then
-      WriteLn('Diffusion JPEG : cadence libre (capture/CPU/ACK) ; qualite JPEG ',
+      WriteLn('JPEG streaming: unlimited frame rate (capture/CPU/ACK); JPEG quality ',
         Options.Quality)
     else
       WriteLn('Diffusion JPEG/H264 selon codec negocie ; ', Options.FPS,
-        ' images/s demandees ; qualite JPEG ', Options.Quality);
+        ' requested frames/s; JPEG quality ', Options.Quality);
     if (Options.MaxWidth = KVM_MAX_FRAME_SIDE) and
        (Options.MaxHeight = KVM_MAX_FRAME_SIDE) then
-      WriteLn('Resolution : NATIVE (bureau multi-ecrans, sans redimensionnement impose)')
+      WriteLn('Resolution: NATIVE (multi-monitor desktop, no forced scaling)')
     else
-      WriteLn('Resolution : limites explicites ', Options.MaxWidth, 'x',
+      WriteLn('Resolution: limites explicites ', Options.MaxWidth, 'x',
         Options.MaxHeight);
-    WriteLn('Securite dimensions : ', KVM_MAX_FRAME_SIDE, ' par cote ; ',
+    WriteLn('Dimension safety limits: ', KVM_MAX_FRAME_SIDE, ' per side; ',
       KVM_MAX_FRAME_PIXELS, ' pixels ; JPEG 4:4:4');
     if Options.Adaptive then
-      WriteLn('Adaptation : ACTIVE (resolution/qualite reduites si ACK lents)')
+      WriteLn('Adaptive mode: ON (reduce resolution/quality if ACKs are slow)')
     else
-      WriteLn('Adaptation : DESACTIVEE');
-    if Options.AllowControl then WriteLn('Souris + clavier : ACTIVES')
-    else WriteLn('Souris + clavier : DESACTIVES');
+      WriteLn('Adaptive mode: OFF');
+    if Options.AllowControl then WriteLn('Mouse + keyboard: ENABLED')
+    else WriteLn('Mouse + keyboard: DISABLED');
     if Options.TLSCert = '' then
-      WriteLn('SECURITE : ws:// est en clair ; utiliser SSH/VPN, pas Internet direct.')
+      WriteLn('SECURITY: ws:// is unencrypted; use SSH/VPN, not direct Internet exposure.')
     else
-      WriteLn('TLS actif : verifier le certificat avec --tls [--tls-ca] au client.');
-    WriteLn('Encodeur demande : ',Options.Encoder,' ; garde session : ',Options.SessionPolicy);
-    if Options.SessionPolicy='backend' then WriteLn('AVERTISSEMENT : etat de session inconnu accepte, protection limitee aux backends.');
-    WriteLn('Token configure, non affiche.');
+      WriteLn('TLS enabled: verify the certificate with --tls [--tls-ca] on the client.');
+    WriteLn('Requested encoder: ',Options.Encoder,'; session guard: ',Options.SessionPolicy);
+    if Options.SessionPolicy='backend' then WriteLn('WARNING: unknown session state accepted; protection is limited to backend checks.');
+    WriteLn('Token configured; value not displayed.');
     if Options.ViewToken <> '' then
-      WriteLn('Jeton vision distinct : ACTIF');
+      WriteLn('Separate view-only token: ENABLED');
     {$IFDEF UNIX}
     fpSignal(SIGINT, SignalHandler(@SignalStop));
     fpSignal(SIGTERM, SignalHandler(@SignalStop));
@@ -116,13 +116,13 @@ begin
     {$IFDEF WINDOWS}
     SetConsoleCtrlHandler(@ConsoleStop, True);
     {$ENDIF}
-    WriteLn('Serveur actif. Arret par Ctrl+C ou SIGTERM (sans stdin).');
+    WriteLn('Server running. Stop with Ctrl+C or SIGTERM (no stdin required).');
     while StopRequested = 0 do Sleep(250);
-    WriteLn('Arret du serveur...');
+    WriteLn('Stopping server...');
   except
     on E: Exception do
     begin
-      WriteLn('Erreur ', E.ClassName, ': ', E.Message);
+      WriteLn('Error ', E.ClassName, ': ', E.Message);
       ExitCode := 1;
     end;
   end;

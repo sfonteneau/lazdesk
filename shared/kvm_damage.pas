@@ -69,7 +69,7 @@ begin
   if Length(Source.RGB) <> Int64(Source.Width) * Source.Height * 3 then
     raise Exception.Create('Tampon source RGB incomplet.');
   if not AllocateFrame(Target, Source.Width, Source.Height) then
-    raise Exception.Create('Dimensions de capture non valides.');
+    raise Exception.Create('Invalid capture dimensions.');
   Target.Order := Source.Order;
   if Length(Source.RGB) > 0 then
     Move(Source.RGB[1], Target.RGB[1], Length(Source.RGB));
@@ -82,7 +82,7 @@ var
 begin
   if (Source.Width < 1) or (Source.Height < 1) or
      (Length(Source.RGB) <> Int64(Source.Width) * Source.Height * 3) then
-    raise Exception.Create('Source RGB invalide pour le cache partiel.');
+    raise Exception.Create('Invalid RGB source for the partial cache.');
   // First capture / resolution change must populate every pixel.
   if (Target.Order <> Source.Order) or
      (Target.Width <> Source.Width) or (Target.Height <> Source.Height) or

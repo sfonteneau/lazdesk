@@ -5,17 +5,17 @@ p = Path(__file__).resolve().parents[1] / 'client' / 'kvm_view_form.pas'
 s = p.read_text(encoding='utf-8')
 assert 'FView.Align := alClient;' in s
 assert 'FMainMenu: TMainMenu' in s
-assert "FFileMenu.Caption:='Fichier'" in s
-assert "FViewMenu.Caption:='Affichage'" in s
-assert "FControlMenu.Caption:='Controle'" in s
-assert "FMenuConnectionSettings.Caption:='Parametres de connexion...'" in s
-assert "FMenuFullscreen.Caption:='Plein ecran'+#9+'F11'" in s
-assert "FMenuControl.Caption:='Autoriser mon controle'" in s
-assert "FMenuKeyboardMode.Caption:='Mode clavier'" in s
-assert "FMenuUnicodeKeys.Caption:='Automatique : texte Unicode + raccourcis'" in s
-assert "FMenuRemoteKeys.Caption:='Touches physiques : disposition distante'" in s
-assert "FMenuText.Caption:='Saisir / coller du texte Unicode...'" in s
-assert "FMenuClipboard.Caption:='Presse-papiers'" in s
+assert "FFileMenu.Caption:='File'" in s
+assert "FViewMenu.Caption:='View'" in s
+assert "FControlMenu.Caption:='Control'" in s
+assert "FMenuConnectionSettings.Caption:='Connection settings...'" in s
+assert "FMenuFullscreen.Caption:='Full screen'+#9+'F11'" in s
+assert "FMenuControl.Caption:='Allow me to control'" in s
+assert "FMenuKeyboardMode.Caption:='Keyboard mode'" in s
+assert "FMenuUnicodeKeys.Caption:='Automatic: Unicode text + shortcuts'" in s
+assert "FMenuRemoteKeys.Caption:='Physical keys: remote layout'" in s
+assert "FMenuText.Caption:='Type / paste Unicode text...'" in s
+assert "FMenuClipboard.Caption:='Clipboard'" in s
 assert 'FMenuButton' not in s, 'Legacy top-right ... button must stay removed'
 assert 'Commandes avancees' not in s, 'No hidden F8 command panel in the visible UI'
 assert 'procedure TKvmViewForm.ConnectionSettingsClick' in s
