@@ -77,5 +77,3 @@ Le depot ne livre plus de bibliotheque Linux precompilee. Pour produire le pont 
 ```sh
 sh native/session/build.sh
 ```
-
-Le build autonome est decrit dans la section « Compilation » ci-dessus. Voir [le compte rendu du nettoyage](NETTOYAGE_LAZDESK.md).
