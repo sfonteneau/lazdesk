@@ -269,7 +269,7 @@ begin
   FControlMenu:=TMenuItem.Create(FMainMenu);
   FControlMenu.Caption:='Control'; FMainMenu.Items.Add(FControlMenu);
   FMenuControl:=TMenuItem.Create(FMainMenu);
-  FMenuControl.Caption:='Allow me to control';
+  FMenuControl.Caption:='Take control';
   FMenuControl.OnClick:=@ControlMenuClick; FControlMenu.Add(FMenuControl);
   FMenuKeyboardMode:=TMenuItem.Create(FMainMenu);
   FMenuKeyboardMode.Caption:='Keyboard mode'; FControlMenu.Add(FMenuKeyboardMode);
@@ -357,7 +357,7 @@ begin
   FControl := TCheckBox.Create(Self);
   FControl.Parent := FTop;
   FControl.SetBounds(735, 28, 240, 24);
-  FControl.Caption := 'Allow me to control';
+  FControl.Caption := 'Take control';
   FControl.Enabled := False;
   FControl.Checked := False;
 
