@@ -12,6 +12,22 @@ LazDesk is a lightweight remote desktop control solution, with a **server** on t
 - **macOS**: ScreenCaptureKit capture.
 - Standalone builds: one server executable and one client executable, without separate LazDesk DLLs.
 
+## Embedding inside another Pascal application (mORMot2 OpenDirect)
+
+The new `kvm_embedded` unit and `packages/LazDeskEmbedded.lpk` let an existing
+Lazarus/FPC application host LazDesk **without launching LazDeskServer.exe**.
+`StartWebSocket()` preserves compatibility with existing clients.
+`StartDirect()` uses mORMot2 **`TTunnelLocal.OpenDirect()`** (version
+**2.4.17970+**, commit [`74cfe56d2`](https://github.com/synopse/mORMot2/commit/74cfe56d2)
+or newer) to transport KVM packets through `ITunnelTransmit`, with **no local
+listening socket**. Upstream mORMot2 now supports **16-MiB direct payloads**,
+so JPEG/KVM frames stay whole without any custom mORMot2 patch.
+The remote endpoint needs the same one-byte KVM text/binary framing;
+the existing viewer uses WebSocket only.
+
+See **[EMBEDDING.md](EMBEDDING.md)** and
+`examples/embedded_in_existing_app.pas` for usage and limitations.
+
 ## Building
 
 Requirements: **Free Pascal / Lazarus**, **mORMot2**, **TurboJPEG**, and platform-specific build tools. On Windows, you also need **MinGW-w64** and **Python 3**.
@@ -77,3 +93,28 @@ This repository no longer ships a precompiled Linux library. To build the sessio
 ```sh
 sh native/session/build.sh
 ```
+
+## Windows 7: GDI capture and session timeout diagnostics
+
+Windows 7 does not support DXGI Desktop Duplication. Start the server with
+`--backend gdi` and preferably build a Windows 7/GDI-only server without
+`--with-dxgi` in the standalone build command.
+
+The startup log contains `[capture] Requested backend=gdi; DXGI enabled=FALSE`.
+If `[dxgi]` errors still appear with this startup message, first verify that
+the running `.exe` was actually rebuilt from these sources and check for
+other running server processes. The compiled-in DXGI feature list alone
+is **not** an indication that DXGI capture is selected.
+
+A session expiration now reports the exact cause and elapsed durations:
+`reason=client idle timeout` means no accepted client message (including
+heartbeat `P`) for over 15 seconds; `reason=video ACK timeout` means the
+oldest in-flight video batch has remained unacknowledged for over 20 seconds;
+`reason=auth timeout` means an unauthenticated connection timed out.
+The timestamps are sampled under the client-state lock to avoid unsigned
+clock-subtraction underflow on busy systems.
+
+For troubleshooting a heavily loaded Windows 7 computer, try
+`--fps 10 --quality 75 --adaptive --max-width 1280 --max-height 720`
+while keeping `--backend gdi`. This is a diagnostic workload reduction,
+not a change to the session timeouts.

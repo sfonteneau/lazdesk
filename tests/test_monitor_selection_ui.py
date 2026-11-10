@@ -30,5 +30,5 @@ assert 'Items[Best].SourceRect' in form
 assert 'MapRemoteCursorToView' in form
 assert 'PaintRegion' in present
 assert 'CaptureMonitorLayoutText' in monitors
-assert 'SendText(Sender,CaptureMonitorLayoutText)' in server
+assert 'SendText(ID,CaptureMonitorLayoutText)' in server
 print('PASS: checkable monitor submenu/topology/no-upscale source guards')

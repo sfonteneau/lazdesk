@@ -12,7 +12,7 @@ assert 'WebSocket fermee : ' in c
 assert 'LOCAL receive error: ' in c
 assert "SetStatus('Connection closed by the server')" not in c
 assert "WriteLn('[ws] Connection closed: '" in s
-assert "WriteLn('[ws] Invalid frame from client '" in s
+assert "WriteLn('[ws/direct] Invalid frame from client '" in s
 assert "WriteLn('[video] NACK from client '" in s
 assert "WriteLn('[auth] Rejected client '" in s
 print('OK - distinct diagnostic messages in sources (lexical test only)')

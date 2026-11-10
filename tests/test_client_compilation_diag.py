@@ -17,5 +17,5 @@ assert 'TargetURI.FromScheme(WS_SCHEME[FTls.Checked]' in c
 assert 'TargetURI, ConnectOptions, Proto' in c and '@ConnectError' in c
 assert 'AUTH ' in c and "' '+Capability" in c
 assert "KVM_WS_ROUTE = 'kvm';" in ws
-assert 'Protocol.UpgradeUri<>KVM_WS_ROUTE' in s
+assert 'Protocol.UpgradeUri <> KVM_WS_ROUTE' in s
 print('PASS: user client v9 + WebSocket diagnostics + internal route handling')

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <Package Version="5">
+    <Name Value="LazDeskEmbedded"/>
+    <Type Value="RunTime"/>
+    <Version Major="1" Minor="0"/>
+    <Author Value="LazDesk"/>
+    <Description Value="LazDesk in-process KVM server (WebSocket or mORMot2 OpenDirect)"/>
+    <License Value="Refer to project README and dependencies"/>
+    <RequiredPkgs>
+      <Item1><PackageName Value="mormot2"/></Item1>
+    </RequiredPkgs>
+    <Files Count="1">
+      <Item1>
+        <Filename Value="../server/kvm_embedded.pas"/>
+        <UnitName Value="kvm_embedded"/>
+      </Item1>
+    </Files>
+  </Package>
+  <CompilerOptions>
+    <Version Value="11"/>
+    <SearchPaths>
+      <OtherUnitFiles Value="../server;../shared"/>
+      <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
+    </SearchPaths>
+    <CodeGeneration>
+      <Optimizations><OptimizationLevel Value="2"/></Optimizations>
+    </CodeGeneration>
+  </CompilerOptions>
+</CONFIG>

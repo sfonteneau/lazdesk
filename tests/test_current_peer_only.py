@@ -12,7 +12,7 @@ assert "'U','X':" not in client
 assert "FRemoteMonitorCount" not in client
 assert "MONITORS '" not in client
 assert "SendText(Sender,'MONITORS '" not in server
-assert "SendText(Sender,CaptureMonitorLayoutText)" in server
+assert "SendText(ID,CaptureMonitorLayoutText)" in server
 assert "Packet[1]<>'X'" in wire
 assert "ReadTextCommit('U'+Copy(Packet,9,N),Points)" in wire
 assert "MakeTextRequest(Next,Copy(Packet,2,MaxInt))" in queue

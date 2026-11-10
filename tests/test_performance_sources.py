@@ -32,7 +32,8 @@ class PerformanceSources(unittest.TestCase):
         server = text('server/kvm_server.pas')
         flow = text('shared/kvm_flow.pas')
         self.assertIn('kqrBusy', transport)
-        self.assertIn('TryQueueEx(ClientID,Frames)', server)
+        self.assertIn('QueueResult := QueueFrames(ClientID,Frames)', server)
+        self.assertIn('Result:=FSocket.TryQueueEx(ID,Frames)', server)
         dispatch = server.split('procedure TKvmServer.DispatchBatches', 1)[1].split('procedure TKvmServer.ActivateClient')[0]
         self.assertIn('CancelPreparedFlowBatch', dispatch)
         self.assertNotIn('RejectFlowBatch(FClients[Index].Flow, Batch.Serial)', dispatch)
@@ -107,7 +108,7 @@ class PerformanceSources(unittest.TestCase):
         self.assertIn("Result := Format('MONITOR_LAYOUT %d %d %d'", monitors)
         self.assertNotIn("SendText(Sender,'MONITORS '", server)
         self.assertNotIn("FRemoteMonitorCount", form)
-        self.assertIn('SendText(Sender,CaptureMonitorLayoutText)', server)
+        self.assertIn('SendText(ID,CaptureMonitorLayoutText)', server)
         self.assertIn("Copy(TextMsg,1,15) = 'MONITOR_LAYOUT '", form)
         self.assertIn('procedure TKvmViewForm.MonitorMenuClick', form)
         self.assertIn("Item.Caption:='All monitors'", form)

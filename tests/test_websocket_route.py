@@ -11,7 +11,7 @@ constants = dict(re.findall(r"\b(KVM_WS_(?:PATH|ROUTE))\s*=\s*'([^']+)'", wire))
 assert constants == {"KVM_WS_PATH": "/kvm", "KVM_WS_ROUTE": "kvm"}, constants
 assert constants["KVM_WS_PATH"].lstrip("/") == constants["KVM_WS_ROUTE"]
 assert "KVM_WS_ROUTE, @HandleFrame" in server
-assert "Protocol.UpgradeUri<>KVM_WS_ROUTE" in server
+assert "Protocol.UpgradeUri <> KVM_WS_ROUTE" in server
 assert 'TargetURI, ConnectOptions, Proto' in client and '@ConnectError' in client
 assert 'KVM_WS_PATH) then' in client
 assert 'FStatus.Caption := TextA;' in client

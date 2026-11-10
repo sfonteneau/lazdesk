@@ -64,9 +64,26 @@ type
     Flow: TKvmFlowState;
   end;
 
+  // KVM frames can be sent to a WebSocket peer or to a local mORMot2
+  // TTunnelLocal.OpenDirect() endpoint. One direct peer per TKvmServer.
+  IKvmDirectSender = interface
+    ['{8B829393-3990-4D28-8A0F-E02405959406}']
+    function TrySend(const Frames: TWebSocketFrameDynArray): TKvmQueueResult;
+  end;
+
   TKvmServer = class
   private
     FSocket: TKvmWebSocketServer;
+    FDirectMode, FDirectClosed, FDirectClientRegistered: Boolean;
+    FDirectSender: IKvmDirectSender;
+    function QueueFrames(ID: THttpServerConnectionID;
+      const Frames: TWebSocketFrameDynArray): TKvmQueueResult;
+    function QueueText(ID: THttpServerConnectionID;
+      const Msg: RawByteString): Boolean;
+    procedure AbortClient(ID: THttpServerConnectionID);
+    function RegisterClient(ID: THttpServerConnectionID): Integer;
+    procedure HandleIncoming(ID: THttpServerConnectionID;
+      const Frame: TWebSocketFrame);
     FWorker: TCaptureThread;
     FEncoderWorker: TEncodeThread;
     FClipboardWorker: TKvmClipboardServerWorker;
@@ -91,11 +108,11 @@ type
     FReleaseX, FReleaseY: Word;
     function ClipboardAllowed(ID: QWord; Epoch: Cardinal): Boolean;
     function ClipboardReply(ID: QWord; const Reply: TKvmClipReply): Boolean;
-    procedure HandleClipboardFrame(Sender: TWebSocketProcess; const Packet: RawByteString);
+    procedure HandleClipboardFrame(ID: THttpServerConnectionID; const Packet: RawByteString);
     function AllowUpgrade(Protocol: TWebSocketProtocol): Integer;
     procedure ProtocolClosed(Protocol: TWebSocketProtocol);
     function AcceptPacket(ID: THttpServerConnectionID; Bytes: Integer): Boolean;
-    procedure BadPacket(Sender: TWebSocketProcess);
+    procedure BadPacket(ID: THttpServerConnectionID);
     procedure RetryInputReleasesLocked;
     function PendingInputReleasesLocked: Boolean;
     procedure SetDesktopAvailable(Value: Boolean);
@@ -130,10 +147,17 @@ type
     procedure HandleKey(ID: THttpServerConnectionID; Pressed: Boolean; VKey: Word);
     procedure HandleWheel(ID: THttpServerConnectionID; Notches: SmallInt);
     procedure HandleFrame(Sender: TWebSocketProcess; const Frame: TWebSocketFrame);
-    procedure SendText(Sender: TWebSocketProcess; const Msg: RawByteString);
+    procedure SendText(ID: THttpServerConnectionID; const Msg: RawByteString);
   public
-    constructor Create(const Options: TKvmServerOptions);
+    constructor Create(const Options: TKvmServerOptions;
+      DirectMode: Boolean = False);
     destructor Destroy; override;
+    // Only for an embedded, portless connection. DirectInput accepts the
+    // existing KVM protocol bytes (never untrusted tunnel fragments).
+    procedure SetDirectSender(const Sender: IKvmDirectSender);
+    procedure DirectInput(Opcode: AnsiChar; const Payload: RawByteString);
+    procedure DirectClose;
+
   end;
 
 implementation
@@ -490,7 +514,7 @@ begin
   end;
 end;
 
-constructor TKvmServer.Create(const Options: TKvmServerOptions);
+constructor TKvmServer.Create(const Options: TKvmServerOptions; DirectMode: Boolean);
 var
   Protocol: TWebSocketProtocolChat;
   Probe: TTurboJpegEncoder;
@@ -498,6 +522,9 @@ var
   Reason: string;
 begin
   inherited Create;
+  FDirectMode := DirectMode;
+  FDirectClosed := False;
+  FDirectClientRegistered := False;
   InitCriticalSection(FLock);
   FWakeCapture:=TEvent.Create(nil,False,False,'');
   FMetrics:=TKvmMetrics.Create(Options.MetricsCSV);
@@ -518,23 +545,26 @@ begin
   WebSocketsMaxFrameMB := 4; // limit parsed incoming frames before dispatch
   Probe := TTurboJpegEncoder.Create; Probe.Free; // fail at startup if missing
   ConfigureCaptureFPS(FFps);
-  Bind := RawUtf8(Options.Listen + ':' + IntToStr(Options.Port));
-  if Options.TLSCert <> '' then
-    FSocket := TKvmWebSocketServer.Create(Bind, nil, nil, 'LazDesk', 2, 30000, [hsoEnableTls])
-  else FSocket := TKvmWebSocketServer.Create(Bind, nil, nil, 'LazDesk');
-  FSocket.OnWebSocketUpgraded:=@AllowUpgrade;
-  FSocket.OnWebSocketClose:=@ProtocolClosed;
-  if FSocket.ThreadPool<>nil then FSocket.ThreadPool.MaxBodyThreadCount:=40;
-  FSocket.Settings^.LoopDelay := 5;
-  FSocket.Settings^.SendDelay := 1;
-  Protocol := TWebSocketProtocolChat.Create(KVM_SUBPROTOCOL,
-    KVM_WS_ROUTE, @HandleFrame);
-  FSocket.WebSocketProtocols.Add(Protocol);
-  if Options.TLSCert <> '' then
-    FSocket.WaitStarted(30, Options.TLSCert, Options.TLSKey,
-      RawUtf8(GetEnvironmentVariable('LAZDESK_TLS_PASSWORD')))
-  else
-    FSocket.WaitStarted;
+  if not DirectMode then
+  begin
+    Bind := RawUtf8(Options.Listen + ':' + IntToStr(Options.Port));
+    if Options.TLSCert <> '' then
+      FSocket := TKvmWebSocketServer.Create(Bind, nil, nil, 'LazDesk', 2, 30000, [hsoEnableTls])
+    else FSocket := TKvmWebSocketServer.Create(Bind, nil, nil, 'LazDesk');
+    FSocket.OnWebSocketUpgraded:=@AllowUpgrade;
+    FSocket.OnWebSocketClose:=@ProtocolClosed;
+    if FSocket.ThreadPool<>nil then FSocket.ThreadPool.MaxBodyThreadCount:=40;
+    FSocket.Settings^.LoopDelay := 5;
+    FSocket.Settings^.SendDelay := 1;
+    Protocol := TWebSocketProtocolChat.Create(KVM_SUBPROTOCOL,
+      KVM_WS_ROUTE, @HandleFrame);
+    FSocket.WebSocketProtocols.Add(Protocol);
+    if Options.TLSCert <> '' then
+      FSocket.WaitStarted(30, Options.TLSCert, Options.TLSKey,
+        RawUtf8(GetEnvironmentVariable('LAZDESK_TLS_PASSWORD')))
+    else
+      FSocket.WaitStarted;
+  end;
   FClipboardWorker:=TKvmClipboardServerWorker.Create(@CreateClipboardBackend,
     @ClipboardAllowed,@ClipboardReply,Pos('Wayland',DesktopBackendName)=0);
   FClipboardWorker.Start;
@@ -568,6 +598,7 @@ begin
     FreeAndNil(FEncoderWorker);
   end;
   FreeAndNil(FSocket);
+  FDirectSender := nil;
 
   EnterCriticalSection(FLock);
   try
@@ -583,6 +614,76 @@ begin
   FWakeCapture.Free;
   FMetrics.Free;
   inherited Destroy;
+end;
+
+// A direct tunnel connects exactly one authenticated KVM peer without a
+// loopback HTTP/WebSocket endpoint. The existing authentication and binary
+// protocol validation remain shared with network clients.
+procedure TKvmServer.SetDirectSender(const Sender: IKvmDirectSender);
+begin
+  if not FDirectMode then
+    raise Exception.Create('Not a direct KVM server');
+  FDirectSender := Sender;
+end;
+
+procedure TKvmServer.DirectInput(Opcode: AnsiChar; const Payload: RawByteString);
+var
+  Frame: TWebSocketFrame;
+begin
+  if not FDirectMode or FDirectClosed then Exit;
+  if (Opcode <> 'B') and (Opcode <> 'T') then
+  begin DirectClose; Exit; end;
+  // Lazily create the unauthenticated session after the mORMot handshake.
+  // This avoids a 5-second auth timer consuming the tunnel setup time.
+  if not FDirectClientRegistered then
+  begin
+    if RegisterClient(1)<>200 then begin DirectClose; Exit; end;
+    FDirectClientRegistered:=True;
+  end;
+  Frame.content := [];
+  Frame.tix := 0;
+  Frame.payload := Payload;
+  if Opcode='B' then Frame.opcode := focBinary
+  else Frame.opcode := focText;
+  HandleIncoming(1,Frame);
+end;
+
+procedure TKvmServer.DirectClose;
+begin
+  if not FDirectMode then Exit;
+  FDirectClosed := True;
+  RemoveClient(1);
+end;
+
+function TKvmServer.QueueFrames(ID: THttpServerConnectionID;
+  const Frames: TWebSocketFrameDynArray): TKvmQueueResult;
+begin
+  if FDirectMode then
+  begin
+    if FDirectClosed or (ID<>1) or (FDirectSender=nil) then Exit(kqrClosed);
+    Result:=FDirectSender.TrySend(Frames);
+    if Result in [kqrClosed,kqrInvalid] then DirectClose;
+  end
+  else if FSocket<>nil then
+    Result:=FSocket.TryQueueEx(ID,Frames)
+  else
+    Result:=kqrClosed;
+end;
+
+function TKvmServer.QueueText(ID: THttpServerConnectionID;
+  const Msg: RawByteString): Boolean;
+var Frames: TWebSocketFrameDynArray;
+begin
+  SetLength(Frames,1);
+  Frames[0].opcode:=focText;
+  Frames[0].content:=[]; Frames[0].tix:=0; Frames[0].payload:=Msg;
+  Result:=QueueFrames(ID,Frames)=kqrQueued;
+end;
+
+procedure TKvmServer.AbortClient(ID: THttpServerConnectionID);
+begin
+  if FDirectMode then DirectClose
+  else if FSocket<>nil then FSocket.AbortConnection(ID);
 end;
 
 function TKvmServer.FindClientLocked(ID: THttpServerConnectionID): Integer;
@@ -718,7 +819,7 @@ begin
     LeaveCriticalSection(FLock);
   end;
   for I := 0 to High(ExpiredIDs) do
-    FSocket.AbortConnection(ExpiredIDs[I]);
+    AbortClient(ExpiredIDs[I]);
 end;
 
 procedure TKvmServer.CaptureDemand(var Wanted: array of Boolean; NowTick: QWord;
@@ -820,7 +921,7 @@ begin
       if Batch.SendCursorShape then Add(CursorShapePacket);
       if Batch.SendCursor then Add(MakeCursor(Batch.CursorX, Batch.CursorY, Batch.CursorVisible));
       Add(MakeBatchEnd(Batch.Serial));
-      QueueResult := FSocket.TryQueueEx(ClientID,Frames);
+      QueueResult := QueueFrames(ClientID,Frames);
       Queued := QueueResult = kqrQueued;
       FMetrics.Queue(Batch.PayloadBytes+7,Queued);
       if not Queued then
@@ -872,7 +973,7 @@ begin
   if Counted then
     WriteLn('[video] NACK from client ',ID,' lot ',Serial,
       ' rejets consecutifs=',Rejects,' fermeture=',Close);
-  if Close then FSocket.AbortConnection(ID);
+  if Close then AbortClient(ID);
   WakeVideoWorkers;
 end;
 
@@ -968,13 +1069,13 @@ begin
   finally LeaveCriticalSection(FLock); end;
 end;
 
-procedure TKvmServer.BadPacket(Sender: TWebSocketProcess);
+procedure TKvmServer.BadPacket(ID: THttpServerConnectionID);
 var I, BadFrames: Integer; Close: Boolean;
 begin
   Close:=True; BadFrames:=0; FMetrics.SecurityReject;
   EnterCriticalSection(FLock);
   try
-    I:=FindClientLocked(Sender.Protocol.ConnectionID);
+    I:=FindClientLocked(ID);
     if I>=0 then
     begin
       Inc(FClients[I].BadFrames);
@@ -982,23 +1083,24 @@ begin
       Close:=BadFrames>=3;
     end;
   finally LeaveCriticalSection(FLock); end;
-  WriteLn('[ws] Invalid frame from client ',Sender.Protocol.ConnectionID,
-    ' erreurs=',BadFrames,' fermeture=',Close);
-  if Close then FSocket.AbortConnection(Sender.Protocol.ConnectionID);
+  WriteLn('[ws/direct] Invalid frame from client ',ID,
+    ' errors=',BadFrames,' closing=',Close);
+  if Close then AbortClient(ID);
 end;
 
-function TKvmServer.AllowUpgrade(Protocol: TWebSocketProtocol): Integer;
+function TKvmServer.RegisterClient(ID: THttpServerConnectionID): Integer;
 var I: Integer; NowTick: QWord;
 begin
-  Result:=429; NowTick:=GetTickCount64;
+  Result:=429;
   EnterCriticalSection(FLock);
   try
-    if (Protocol.UpgradeUri<>KVM_WS_ROUTE) or
-       (Length(FClients)>=KVM_MAX_CONNECTIONS) or
-       not SpendRate(FUpgradeRate,1,NowTick) then begin FMetrics.SecurityReject; Exit; end;
-    if FindClientLocked(Protocol.ConnectionID)>=0 then Exit;
+    NowTick:=GetTickCount64;
+    if (Length(FClients)>=KVM_MAX_CONNECTIONS) or
+       not SpendRate(FUpgradeRate,1,NowTick) or
+       (FindClientLocked(ID)>=0) then
+    begin FMetrics.SecurityReject; Exit; end;
     I:=Length(FClients); SetLength(FClients,I+1);
-    FClients[I].ID:=Protocol.ConnectionID; FClients[I].LastSeen:=NowTick;
+    FClients[I].ID:=ID; FClients[I].LastSeen:=NowTick;
     FClients[I].DesktopNoticePending:=True;
     InitFlow(FClients[I].Flow); InitAdaptive(FClients[I].Adaptive);
     InitRate(FClients[I].InputRate,1000,500,NowTick);
@@ -1009,6 +1111,12 @@ begin
       4*(KVM_CLIP_MAX_BYTES+32),NowTick);
     Result:=200;
   finally LeaveCriticalSection(FLock); end;
+end;
+
+function TKvmServer.AllowUpgrade(Protocol: TWebSocketProtocol): Integer;
+begin
+  if Protocol.UpgradeUri <> KVM_WS_ROUTE then Exit(404);
+  Result := RegisterClient(Protocol.ConnectionID);
 end;
 
 procedure TKvmServer.ProtocolClosed(Protocol: TWebSocketProtocol);
@@ -1219,10 +1327,9 @@ begin
   end;
 end;
 
-procedure TKvmServer.SendText(Sender: TWebSocketProcess; const Msg: RawByteString);
+procedure TKvmServer.SendText(ID: THttpServerConnectionID; const Msg: RawByteString);
 begin
-  if not FSocket.TryQueueText(Sender.Protocol.ConnectionID,Msg) then
-    FSocket.AbortConnection(Sender.Protocol.ConnectionID);
+  if not QueueText(ID,Msg) then AbortClient(ID);
 end;
 
 procedure TKvmServer.SetDesktopAvailable(Value: Boolean);
@@ -1268,7 +1375,7 @@ begin
   finally LeaveCriticalSection(FLock); end;
   Frames[0].payload := MakeDesktopState(Available,Reason,Epoch);
   for I := 0 to High(IDs) do
-    if FSocket.TryQueue(IDs[I],Frames) then
+    if QueueFrames(IDs[I],Frames)=kqrQueued then
     begin
       EnterCriticalSection(FLock);
       try
@@ -1302,16 +1409,15 @@ begin
   begin R.Text:=''; R.HasText:=False; R.WriteResult:=crDenied; R.ReadResult:=crDenied; end;
   SetLength(Frames,1); Frames[0].opcode:=focBinary;
   Frames[0].content:=[]; Frames[0].tix:=0; Frames[0].payload:=MakeClipReply(R);
-  Result:=(FSocket<>nil) and FSocket.TryQueue(THttpServerConnectionID(ID),Frames);
-  if not Result and (FSocket<>nil) then FSocket.AbortConnection(THttpServerConnectionID(ID));
+  Result:=QueueFrames(THttpServerConnectionID(ID),Frames)=kqrQueued;
+  if not Result then AbortClient(THttpServerConnectionID(ID));
 end;
 
-procedure TKvmServer.HandleClipboardFrame(Sender: TWebSocketProcess; const Packet: RawByteString);
+procedure TKvmServer.HandleClipboardFrame(ID: THttpServerConnectionID; const Packet: RawByteString);
 var Req: TKvmClipRequest; R: TKvmClipReply; I: Integer;
   ID: THttpServerConnectionID; Valid: Boolean; NowTick: QWord;
 begin
-  ID:=Sender.Protocol.ConnectionID;
-  if not ReadClipRequest(Packet,Req) then begin BadPacket(Sender); Exit; end;
+  if not ReadClipRequest(Packet,Req) then begin BadPacket(ID); Exit; end;
   NowTick:=GetTickCount64; Valid:=False;
   EnterCriticalSection(FLock);
   try
@@ -1326,7 +1432,7 @@ begin
     end;
   finally LeaveCriticalSection(FLock); end;
   if not Valid then
-  begin FMetrics.SecurityReject; FSocket.AbortConnection(ID); Exit; end;
+  begin FMetrics.SecurityReject; AbortClient(ID); Exit; end;
   R.Epoch:=Req.Epoch; R.Serial:=Req.Serial; R.HasText:=False; R.Text:='';
   R.WriteResult:=crSkip; R.ReadResult:=crSkip;
   if not ClipboardAllowed(QWord(ID),Req.Epoch) then
@@ -1341,13 +1447,16 @@ begin
 end;
 
 procedure TKvmServer.HandleFrame(Sender: TWebSocketProcess; const Frame: TWebSocketFrame);
-var
-  ID: THttpServerConnectionID; Action,Button: Byte; X,Y,VKey: Word;
+begin
+  HandleIncoming(Sender.Protocol.ConnectionID,Frame);
+end;
+
+procedure TKvmServer.HandleIncoming(ID: THttpServerConnectionID; const Frame: TWebSocketFrame);
+var Action,Button: Byte; X,Y,VKey: Word;
   Pressed,ControlRight,WantH264,Valid: Boolean; Wheel: SmallInt;
   Serial: Cardinal; Points: TKvmCodePoints; Token,Caps,Receipt: RawByteString;
   Split: Integer; Reply: TWebSocketFrameDynArray;
 begin
-  ID:=Sender.Protocol.ConnectionID;
   case Frame.opcode of
     focConnectionClose: begin RemoveClient(ID); Exit; end;
     focText:
@@ -1355,12 +1464,12 @@ begin
       if (Length(Frame.payload)>272) or (Copy(Frame.payload,1,5)<>'AUTH ') then
       begin
         WriteLn('[auth] Invalid request from client ',ID,' (longueur=',Length(Frame.payload),')');
-        BadPacket(Sender); Exit;
+        BadPacket(ID); Exit;
       end;
       Token:=Copy(Frame.payload,6,MaxInt); Split:=Pos(' ',Token);
-      if Split=0 then begin BadPacket(Sender); Exit; end;
+      if Split=0 then begin BadPacket(ID); Exit; end;
       Caps:=Copy(Token,Split+1,MaxInt); SetLength(Token,Split-1);
-      if (Caps<>'jpeg') and (Caps<>'h264') then begin BadPacket(Sender); Exit; end;
+      if (Caps<>'jpeg') and (Caps<>'h264') then begin BadPacket(ID); Exit; end;
       WantH264:=Caps='h264';
       ControlRight:=FAllowControl and SecureTokenEqual(Token,FToken);
       if ControlRight or ((FViewToken<>'') and SecureTokenEqual(Token,FViewToken)) or
@@ -1368,31 +1477,31 @@ begin
       begin
         if AddClient(ID,ControlRight,WantH264) then
         begin
-          if ControlRight then SendText(Sender,'OK CTRL') else SendText(Sender,'OK VIEW');
+          if ControlRight then SendText(ID,'OK CTRL') else SendText(ID,'OK VIEW');
           // Current clients get the full remote monitor geometry.
-          SendText(Sender,CaptureMonitorLayoutText);
+          SendText(ID,CaptureMonitorLayoutText);
           ActivateClient(ID); WriteLn('[client] Authenticated: ',ID,' control=',ControlRight);
         end
-        else begin FMetrics.SecurityReject; FSocket.AbortConnection(ID); end;
+        else begin FMetrics.SecurityReject; AbortClient(ID); end;
       end
       else
       begin
         FMetrics.SecurityReject;
         WriteLn('[auth] Rejected client ',ID,' (token/capabilities rejected; secret not displayed)');
-        FSocket.AbortConnection(ID);
+        AbortClient(ID);
       end;
     end;
     focBinary:
     begin
       if (Length(Frame.payload)>0) and (Frame.payload[1]='c') then
-      begin HandleClipboardFrame(Sender,Frame.payload); Exit; end;
+      begin HandleClipboardFrame(ID,Frame.payload); Exit; end;
       if (Length(Frame.payload)=0) or (Length(Frame.payload)>KVM_MAX_TEXT_BYTES+KVM_TEXT_REQUEST_HEADER) or
          not AcceptPacket(ID,Length(Frame.payload)) then
       begin
         FMetrics.SecurityReject;
         WriteLn('[ws] Frame rejected (quota, size, or session) for client ',ID,
           ' longueur=',Length(Frame.payload));
-        FSocket.AbortConnection(ID); Exit;
+        AbortClient(ID); Exit;
       end;
       Valid:=False;
       case Frame.payload[1] of
@@ -1427,7 +1536,7 @@ begin
             Receipt:=RejectText(ID,Serial,Frame.payload);
             SetLength(Reply,1); Reply[0].opcode:=focBinary; Reply[0].content:=[];
             Reply[0].tix:=0; Reply[0].payload:=Receipt;
-            if not FSocket.TryQueue(ID,Reply) then FSocket.AbortConnection(ID);
+            if QueueFrames(ID,Reply)<>kqrQueued then AbortClient(ID);
           end;
           Exit;
         end
@@ -1435,13 +1544,13 @@ begin
         begin
           WriteLn('[ws] Invalid frame details from client ',ID,' type=',Ord(Frame.payload[1]),
             ' longueur=',Length(Frame.payload));
-          BadPacket(Sender); Exit;
+          BadPacket(ID); Exit;
         end;
       end;
       if not TouchClient(ID) then
       begin
         WriteLn('[ws] Client missing or not ready: ',ID);
-        FSocket.AbortConnection(ID); Exit;
+        AbortClient(ID); Exit;
       end;
       try
         case Frame.payload[1] of
@@ -1449,8 +1558,8 @@ begin
           'A': AckBatch(ID,Serial);
           'N': NackBatch(ID,Serial);
           'R': RequestSnapshot(ID);
-          'G': if AcquireControl(ID) then SendText(Sender,'CTRL GRANTED') else SendText(Sender,'CTRL BUSY');
-          'L': begin RelinquishControl(ID,False); SendText(Sender,'CTRL RELEASED'); end;
+          'G': if AcquireControl(ID) then SendText(ID,'CTRL GRANTED') else SendText(ID,'CTRL BUSY');
+          'L': begin RelinquishControl(ID,False); SendText(ID,'CTRL RELEASED'); end;
           'Z': RelinquishControl(ID,True);
           'M': HandleMouse(ID,Action,Button,X,Y);
           'K': HandleKey(ID,Pressed,VKey);
@@ -1460,11 +1569,11 @@ begin
             Receipt:=HandleText(ID,Serial,Frame.payload,Points);
             SetLength(Reply,1); Reply[0].opcode:=focBinary; Reply[0].content:=[];
             Reply[0].tix:=0; Reply[0].payload:=Receipt;
-            if not FSocket.TryQueue(ID,Reply) then FSocket.AbortConnection(ID);
+            if QueueFrames(ID,Reply)<>kqrQueued then AbortClient(ID);
           end;
         end;
       except on E: Exception do
-        begin WriteLn('[input] Command failed (content not logged)'); SendText(Sender,'ERR INPUT'); end;
+        begin WriteLn('[input] Command failed (content not logged)'); SendText(ID,'ERR INPUT'); end;
       end;
     end;
   end;
