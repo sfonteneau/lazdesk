@@ -61,6 +61,8 @@ begin
     $dc: Result := $005c; // backslash
     $dd: Result := $005d; // right bracket
     $de: Result := $0027; // apostrophe
+    $df: Result := $0021; // VK_OEM_8: ! on the standard French AZERTY layout
+    $e2: Result := $003c; // VK_OEM_102: extra ISO key (< on FR keyboards)
   end;
 end;
 

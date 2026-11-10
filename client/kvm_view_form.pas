@@ -195,6 +195,31 @@ const
   KVM_LOCAL_NATIVE_CURSOR: TCursor = 1001;
   {$ENDIF}
 
+{$IFDEF WINDOWS}
+// VK_RMENU is the physical right Alt key. On Windows AltGr normally also
+// reports Ctrl+Alt in TShiftState; this check distinguishes it from a genuine
+// left-Ctrl + left-Alt shortcut without assuming every Ctrl+Alt is AltGr.
+function KvmWinGetKeyState(VKey: Integer): SmallInt; stdcall;
+  external 'user32.dll' name 'GetKeyState';
+function KvmWinGetKeyboardLayout(ThreadId: Cardinal): PtrUInt; stdcall;
+  external 'user32.dll' name 'GetKeyboardLayout';
+function KvmWinMapVirtualKeyExW(Code, MapType: Cardinal; Layout: PtrUInt): Cardinal;
+  stdcall; external 'user32.dll' name 'MapVirtualKeyExW';
+{$ENDIF}
+
+function KvmIsTextShortcut(const Shift: TShiftState): Boolean;
+begin
+  Result := (ssMeta in Shift) or (ssCtrl in Shift) or (ssAlt in Shift);
+  {$IFDEF WINDOWS}
+  if (ssAlt in Shift) and (KvmWinGetKeyState($a5) < 0) then
+    Result := ssMeta in Shift; // genuine right Alt / AltGr produces text
+  {$ELSE}
+  // Non-Windows LCL does not expose the physical right-Alt state here.
+  // Keep the existing best-effort AltGr behavior on these clients.
+  if (ssCtrl in Shift) and (ssAlt in Shift) then
+    Result := ssMeta in Shift;
+  {$ENDIF}
+end;
 
 constructor TKvmViewForm.Create(AOwner: TComponent);
 var
@@ -2296,11 +2321,28 @@ begin
 end;
 
 function IsPrintableVirtualKey(K: Word): Boolean;
+{$IFDEF WINDOWS}
+var
+  Mapped: Cardinal;
+{$ENDIF}
 begin
-  // Windows-style VKs supplied by Lazarus. For ordinary text we rely
-  // on the UTF-8 keypress event; only shortcuts/navigation use VKs.
+  // Never suppress keys with control/navigation semantics: OnUTF8KeyPress
+  // rejects their control characters, and they must reach the remote host.
+  if K in [$08, $09, $0d, $1b, $2e] then Exit(False);
+  {$IFDEF WINDOWS}
+  // Ask the ACTUAL local Windows keyboard layout whether this VK makes a
+  // character, instead of maintaining a US-only table of OEM key numbers.
+  // Type=2 (MAPVK_VK_TO_CHAR); the high bit marks a dead key and must be
+  // removed. Windows generates the actual shifted/AltGr text in the LCL
+  // OnUTF8KeyPress callback, never from this unshifted lookup.
+  Mapped := KvmWinMapVirtualKeyExW(K, 2, KvmWinGetKeyboardLayout(0)) and $7fffffff;
+  if (Mapped >= 32) and (Mapped <> 127) then Exit(True);
+  {$ENDIF}
+  // Fallback for other LCL clients and unusual Windows keyboard drivers.
+  // Includes French AZERTY VK_OEM_8 ($df), the ISO VK_OEM_102 ($e2),
+  // Brazilian ABNT keys and Japanese OEM_AX ($e1).
   Result := (K = $20) or (K in [$30..$39, $41..$5a, $60..$6f,
-    $ba..$c0, $db..$de]);
+    $ba..$c2, $db..$df, $e1..$e2]);
 end;
 
 procedure TKvmViewForm.RemoteUTF8KeyPress(Sender: TObject;
@@ -2312,9 +2354,9 @@ begin
   if FRemoteKeys.Checked then begin UTF8Key:=''; Exit; end;
   if (ActiveControl = FHost) or (ActiveControl = FPort) or
      (ActiveControl = FToken) then Exit;
-  // Ctrl+C, Alt+F4 and similar shortcuts remain virtual-key events.
-  // Ctrl+Alt together may be AltGr on international layouts.
-  if ((ssCtrl in FLastShift) xor (ssAlt in FLastShift)) or (ssMeta in FLastShift) then Exit;
+  // Shortcuts remain virtual-key events. Windows AltGr is the physical
+  // right Alt key, not an arbitrary Ctrl+Alt combination.
+  if KvmIsTextShortcut(FLastShift) then Exit;
   // TUTF8Char is a short string in the LCL. Copy exactly the bytes delivered
   // by the widgetset; do not pass through the process ANSI code page.
   SetLength(Utf8Bytes,Length(UTF8Key));
@@ -2345,7 +2387,7 @@ begin
   if (ActiveControl = FHost) or (ActiveControl = FPort) or
      (ActiveControl = FToken) then Exit;
   if (Key=0) or (Key>255) then Exit;
-  Shortcut := ((ssCtrl in Shift) xor (ssAlt in Shift)) or (ssMeta in Shift);
+  Shortcut := KvmIsTextShortcut(Shift);
   if not FRemoteKeys.Checked and IsPrintableVirtualKey(Key) and not Shortcut then
   begin
     FSuppressedKeys[Key] := True;

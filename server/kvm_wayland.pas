@@ -134,10 +134,15 @@ end;
 procedure WaylandKey(Pressed: Boolean; VKey: Word);
 var Sym: Cardinal;
 begin
+  if (VKey = 0) or (VKey > 255) then
+    raise Exception.Create('Portal: invalid keyboard key.');
   Sym := KvmKeysym(VKey);
-  if (Sym <> 0) and WaylandAlive then
-    if NativeKey(Handle, Sym, Ord(Pressed)) = 0 then
-      raise Exception.Create('Portal: keyboard command rejected.');
+  if Sym = 0 then
+    raise Exception.Create('Portal: key has no Wayland keysym mapping.');
+  if not WaylandAlive then
+    raise Exception.Create('Portal: keyboard session unavailable.');
+  if NativeKey(Handle, Sym, Ord(Pressed)) = 0 then
+    raise Exception.Create('Portal: keyboard command rejected.');
 end;
 procedure WaylandText(CodePoint: Cardinal);
 var Sym: Cardinal;

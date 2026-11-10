@@ -15,7 +15,11 @@ implementation
 
 uses SysUtils, ctypes, kvm_x11_api, kvm_x11_session, kvm_monitors, kvm_geometry, kvm_keysym;
 
-var HeldCodes: array[0..255] of Byte;
+var
+  HeldCodes: array[0..255] of Byte;
+  // Only the two additional ISO/AZERTY OEM keys need synthetic modifiers
+  // to resolve their logical keysyms on a differently laid-out X11 host.
+  HeldOemShift, HeldOemLevel3: array[0..255] of Byte;
 
 function CheckX11Control(out Reason: string): Boolean;
 var
@@ -70,9 +74,32 @@ begin
   finally UnlockX11; end;
 end;
 
+// X11's legacy EuroSign keysym ($20ac) is not the same as the Unicode
+// encoding U20AC ($010020ac). Search both before refusing to type a symbol.
+// The lookup never rewrites the global XKB keymap or guesses a different key.
+function FindXkbSymbol(D: Pointer; Group: Byte; Symbol: CULong;
+  out FoundCode, FoundLevel: CInt): Boolean;
+var
+  MinCode, MaxCode, Code, Level: CInt;
+begin
+  FoundCode := 0; FoundLevel := 0;
+  XDisplayKeycodes(D, MinCode, MaxCode);
+  for Level := 0 to 3 do
+  begin
+    for Code := MinCode to MaxCode do
+      if XkbKeycodeToKeysym(D, Byte(Code), Group, Level) = Symbol then
+      begin
+        FoundCode := Code;
+        FoundLevel := Level;
+        Exit(True);
+      end;
+  end;
+  Result := False;
+end;
+
 procedure InjectText(CodePoint: Cardinal);
 var
-  D: Pointer; Sym: CULong; MinCode, MaxCode, Code, Level, FoundCode, FoundLevel: CInt;
+  D: Pointer; Sym: CULong; FoundCode, FoundLevel: CInt;
   ShiftKey, Level3Key: Byte; State: TXkbState; ShiftDown, Level3Down, CleanupOK: Boolean;
 begin
   if (CodePoint < 32) or (CodePoint > $10ffff) or
@@ -83,14 +110,12 @@ begin
     if D = nil then raise Exception.Create('X11 inaccessible');
     FillChar(State, SizeOf(State), 0);
     if XkbGetState(D, $100, State) <> 0 then raise Exception.Create('Etat XKB inaccessible'); // XkbUseCoreKbd
-    XDisplayKeycodes(D, MinCode, MaxCode);
-    FoundCode := 0; FoundLevel := 0;
-    for Level := 0 to 3 do
+    if not FindXkbSymbol(D, State.group, Sym, FoundCode, FoundLevel) then
     begin
-      for Code := MinCode to MaxCode do
-        if XkbKeycodeToKeysym(D, Byte(Code), State.group, Level) = Sym then
-        begin FoundCode := Code; FoundLevel := Level; Break; end;
-      if FoundCode <> 0 then Break;
+      // Some X11 layouts expose EuroSign only as the legacy $20ac keysym.
+      if (CodePoint <> $20ac) or
+         (not FindXkbSymbol(D, State.group, $20ac, FoundCode, FoundLevel)) then
+        FoundCode := 0;
     end;
     if FoundCode = 0 then
     begin
@@ -126,6 +151,88 @@ begin
   finally UnlockX11; end;
 end;
 
+// VK_OEM_8 (French '!') and VK_OEM_102 (ISO '<') have no independent
+// physical key identity in the old VK-only protocol. When used in physical
+// mode, resolve their symbols with the modifiers required by this XKB map.
+// Keep modifiers down until key-up, including during key-repeat events.
+procedure InjectExtraOemKey(D: Pointer; Pressed: Boolean; VKey: Word);
+var
+  Code, Level: CInt;
+  State: TXkbState;
+  Symbol: CULong;
+  ShiftKey, Level3Key, AddedShift, AddedLevel3: Byte;
+  PressedMap: array[0..31] of AnsiChar;
+begin
+  if not Pressed then
+  begin
+    if HeldCodes[VKey] <> 0 then
+    begin
+      if XTestFakeKeyEvent(D, HeldCodes[VKey], 0, 0) = 0 then
+        raise Exception.Create('XTest rejected OEM key release');
+      HeldCodes[VKey] := 0;
+    end;
+    if HeldOemLevel3[VKey] <> 0 then
+    begin
+      if XTestFakeKeyEvent(D, HeldOemLevel3[VKey], 0, 0) = 0 then
+        raise Exception.Create('XTest rejected OEM AltGr release');
+      HeldOemLevel3[VKey] := 0;
+    end;
+    if HeldOemShift[VKey] <> 0 then
+    begin
+      if XTestFakeKeyEvent(D, HeldOemShift[VKey], 0, 0) = 0 then
+        raise Exception.Create('XTest rejected OEM Shift release');
+      HeldOemShift[VKey] := 0;
+    end;
+    Exit;
+  end;
+
+  if HeldCodes[VKey] <> 0 then
+  begin
+    if XTestFakeKeyEvent(D, HeldCodes[VKey], 1, 0) = 0 then
+      raise Exception.Create('XTest rejected repeated OEM key');
+    Exit;
+  end;
+  Symbol := KvmKeysym(VKey);
+  if (XkbGetState(D, $100, State) <> 0) or
+     not FindXkbSymbol(D, State.group, Symbol, Code, Level) then
+    raise Exception.Create('OEM key not found in active XKB layout');
+  ShiftKey := XKeysymToKeycode(D, $ffe1);
+  Level3Key := XKeysymToKeycode(D, $fe03);
+  if (((Level and 1) <> 0) and (ShiftKey = 0)) or
+     (((Level and 2) <> 0) and (Level3Key = 0)) then
+    raise Exception.Create('OEM XKB modifier unavailable');
+  // Do not release a Shift/AltGr key that the remote user already holds.
+  FillChar(PressedMap, SizeOf(PressedMap), 0);
+  if XQueryKeymap(D, @PressedMap[0]) = 0 then
+    raise Exception.Create('X11 key state unavailable');
+  AddedShift := 0; AddedLevel3 := 0;
+  try
+    if ((Level and 1) <> 0) and ((State.mods and 1) = 0) then
+    begin
+      if XTestFakeKeyEvent(D, ShiftKey, 1, 0) = 0 then
+        raise Exception.Create('XTest rejected OEM Shift');
+      AddedShift := ShiftKey;
+    end;
+    if ((Level and 2) <> 0) and
+       ((Ord(PressedMap[Level3Key div 8]) and (1 shl (Level3Key mod 8))) = 0) then
+    begin
+      if XTestFakeKeyEvent(D, Level3Key, 1, 0) = 0 then
+        raise Exception.Create('XTest rejected OEM AltGr');
+      AddedLevel3 := Level3Key;
+    end;
+    if XTestFakeKeyEvent(D, Code, 1, 0) = 0 then
+      raise Exception.Create('XTest rejected OEM key');
+    HeldCodes[VKey] := Byte(Code);
+    HeldOemShift[VKey] := AddedShift;
+    HeldOemLevel3[VKey] := AddedLevel3;
+  except
+    // A rejected key-down must never leave newly pressed modifiers stuck.
+    if AddedLevel3 <> 0 then XTestFakeKeyEvent(D, AddedLevel3, 0, 0);
+    if AddedShift <> 0 then XTestFakeKeyEvent(D, AddedShift, 0, 0);
+    raise;
+  end;
+end;
+
 procedure InjectKey(Pressed: Boolean; VKey: Word);
 var D: Pointer; KeyCode: Byte; Symbol: CULong;
 begin
@@ -133,6 +240,12 @@ begin
   D:=LockX11;
   try
     if D=nil then raise Exception.Create('X11 inaccessible');
+    if VKey in [$df, $e2] then
+    begin
+      InjectExtraOemKey(D, Pressed, VKey);
+      XFlush(D);
+      Exit;
+    end;
     KeyCode:=HeldCodes[VKey];
     if not Pressed and (KeyCode=0) then Exit; // never injected: no release to retry
     if KeyCode=0 then
