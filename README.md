@@ -28,6 +28,24 @@ the existing viewer uses WebSocket only.
 See **[EMBEDDING.md](EMBEDDING.md)** and
 `examples/embedded_in_existing_app.pas` for usage and limitations.
 
+## Viewer inside an existing application: separate window (recommended)
+
+`packages/LazDeskViewer.lpk` contains **`TKvmViewerWindow`**, a normal modeless
+Lazarus `TForm` created by the **host application's process**. Call
+`TKvmViewerWindow.Create(Self)` / `Show` / `Connect`, or the helper
+`OpenLazDeskViewerWindow(Self, Options)`. Its **own Windows window** has the
+original LazDesk menus, multi-monitor features, keyboard/mouse and JPEG viewer.
+Closing it frees the viewer and **does not close the host application**. No
+`LazDeskClient.exe` process is started, and no viewer executable is required.
+
+For an in-form viewer, the same package still provides `TKvmViewerFrame` for a
+`TPanel` or `TTabSheet`. Both modes currently use the **WebSocket** transport;
+they cannot yet connect to a server configured as `OpenDirect()`-only.
+
+See [VIEWER_EMBEDDING.md](VIEWER_EMBEDDING.md),
+`examples/viewer_separate_window.pas`, and
+`examples/viewer_in_existing_form.pas`.
+
 ## Building
 
 Requirements: **Free Pascal / Lazarus**, **mORMot2**, **TurboJPEG**, and platform-specific build tools. On Windows, you also need **MinGW-w64** and **Python 3**.

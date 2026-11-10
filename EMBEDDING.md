@@ -135,9 +135,12 @@ It cannot connect with the existing WebSocket-only `LazDeskClient.exe`.
 5. Send `P` heartbeats at least every 3 seconds, and acknowledge complete
    video batches (`B` -> `A`, see `kvm_flow.pas`) or the session expires.
 
-The repository does **not yet contain a direct-mode UI client adapter** for
-`client/kvm_view_form.pas`. Existing WebSocket clients still need
-`StartWebSocket` / `LazDeskServer`.
+An embeddable **WebSocket viewer UI** now exists in
+`client/kvm_viewer_frame.pas` / `packages/LazDeskViewer.lpk`. It can be parented
+to an existing application's panel or tab, with no `LazDeskClient.exe`.
+However, the frame is not yet a **direct-mode** UI client adapter for
+`OpenDirect()`; use `StartWebSocket` for this viewer. See
+[VIEWER_EMBEDDING.md](VIEWER_EMBEDDING.md) for its API and limitations.
 
 ## Native direct frames (no JPEG fragmentation)
 

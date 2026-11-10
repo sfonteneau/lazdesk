@@ -1,0 +1,7 @@
+object KvmViewerFrame: TKvmViewerFrame
+  Left = 0
+  Height = 480
+  Top = 0
+  Width = 640
+  TabOrder = 0
+end

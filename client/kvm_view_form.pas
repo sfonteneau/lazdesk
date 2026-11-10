@@ -90,6 +90,8 @@ type
     FRestoreValid: Boolean;
     FAutoConnect: Boolean;
     FAutoControl, FAutoControlPending: Boolean;
+    FEmbeddedMode: Boolean;
+    FOnStatusChange: TNotifyEvent;
 
     procedure ClipboardClick(Sender: TObject);
     procedure SyncClipboardOptions;
@@ -164,6 +166,19 @@ type
     procedure CloseSocket;
   public
     procedure ApplyOptions(const Options: TKvmClientOptions);
+    // Host-facing methods for embedding this viewer into another LCL window.
+    // Call EnableEmbeddedMode before showing the viewer or connecting.
+    procedure EnableEmbeddedMode;
+    procedure Connect;
+    procedure Disconnect;
+    procedure RequestControl(Enabled: Boolean);
+    procedure RefreshDesktop;
+    procedure ReleaseLocalInputs;
+    function Connected: Boolean;
+    function Authenticated: Boolean;
+    function ControlGranted: Boolean;
+    function StatusText: string;
+    property OnStatusChange: TNotifyEvent read FOnStatusChange write FOnStatusChange;
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
   end;
@@ -228,6 +243,7 @@ begin
   FKeyboardFocus := False;
   FAutoConnect := False;
   FAutoControl := False; FAutoControlPending := False;
+  FEmbeddedMode := False;
   FDesktopPaused := True;
   WebSocketsMaxFrameMB := 4;
 
@@ -417,6 +433,73 @@ begin
   FTimer.Enabled := True;
 end;
 
+procedure TKvmViewForm.EnableEmbeddedMode;
+begin
+  if FSocket <> nil then
+    raise Exception.Create('EnableEmbeddedMode must be called before connecting.');
+  if FEmbeddedMode then Exit;
+  FEmbeddedMode := True;
+  FAutoConnect := False;
+  FPreferMaximized := False;
+  FFullScreenMode := False;
+  FSpanningMonitors := False;
+  FRestoreValid := False;
+  Menu := nil;
+  BorderStyle := bsNone;
+  Position := poDesigned;
+  // The host owns the top-level window, menus and geometry.
+  // Do not invoke ApplyMonitorLayout here: we may not be parented yet.
+end;
+
+procedure TKvmViewForm.Connect;
+begin
+  if not FClosing and (FSocket = nil) then ConnectClick(nil);
+end;
+
+procedure TKvmViewForm.Disconnect;
+begin
+  if not FClosing then DisconnectClick(nil);
+end;
+
+procedure TKvmViewForm.RequestControl(Enabled: Boolean);
+begin
+  if FClosing or not FAuthorized then Exit;
+  if Enabled and not FControl.Enabled then Exit;
+  if FControl.Checked = Enabled then Exit;
+  FControl.Checked := Enabled;
+  ControlClick(nil);
+end;
+
+procedure TKvmViewForm.RefreshDesktop;
+begin
+  if not FClosing then RefreshClick(nil);
+end;
+
+procedure TKvmViewForm.ReleaseLocalInputs;
+begin
+  if not FClosing then WindowDeactivated(nil);
+end;
+
+function TKvmViewForm.Connected: Boolean;
+begin
+  Result := FSocket <> nil;
+end;
+
+function TKvmViewForm.Authenticated: Boolean;
+begin
+  Result := FAuthorized;
+end;
+
+function TKvmViewForm.ControlGranted: Boolean;
+begin
+  Result := FAuthorized and FControlGranted and not FDesktopPaused;
+end;
+
+function TKvmViewForm.StatusText: string;
+begin
+  Result := FStatus.Caption;
+end;
+
 procedure TKvmViewForm.ApplyOptions(const Options: TKvmClientOptions);
 begin
   FHost.Text := Options.Host;
@@ -426,6 +509,7 @@ begin
   FAutoControl := Options.AutoControl;
   FAutoControlPending := False; // A fresh session arms this after ConnectClick.
   FPreferMaximized := Options.Maximized;
+  if FEmbeddedMode then FPreferMaximized := False;
   ApplyMonitorLayout;
   FTls.Checked := Options.TLS;
   FTlsCaFile := Options.TLSCA;
@@ -455,6 +539,7 @@ begin
   FStatus.Caption := TextA;
   FStatus.Hint := TextA + LineEnding + 'Journal : ' + KvmClientLogPath;
   FStatus.ShowHint := True;
+  if Assigned(FOnStatusChange) then FOnStatusChange(Self);
 end;
 
 procedure TKvmViewForm.LayoutOverlay;
@@ -604,6 +689,7 @@ end;
 
 procedure TKvmViewForm.ToggleFullScreen;
 begin
+  if FEmbeddedMode then Exit; // host owns top-level window and shortcuts
   FFullScreenMode:=not FFullScreenMode;
   SyncMainMenu;
   ApplyMonitorLayout;
@@ -705,8 +791,9 @@ begin
   begin FMenuClipFromRemote.Enabled:=FClipFromRemote.Enabled; FMenuClipFromRemote.Checked:=FClipFromRemote.Checked; end;
   if FMenuClipboard<>nil then FMenuClipboard.Enabled:=FClipToRemote.Enabled or FClipFromRemote.Enabled;
   SyncMonitorMenu;
-  // As in Firefox, the native menu bar disappears in full-screen mode.
-  if FMainMenu<>nil then
+  // Never replace the host application's menu in embedded mode.
+  if FEmbeddedMode then Menu := nil
+  else if FMainMenu<>nil then
     if FFullScreenMode then Menu:=nil else Menu:=FMainMenu;
 end;
 
@@ -842,6 +929,17 @@ var
       WindowState:=wsNormal;
   end;
 begin
+  // An embedded viewer is a child control, not an independently movable
+  // desktop window: render all selected remote monitors inside its own bounds.
+  if FEmbeddedMode then
+  begin
+    FSpanningMonitors := False;
+    FFullScreenMode := False;
+    FRestoreValid := False;
+    LayoutOverlay;
+    SyncMainMenu;
+    Exit;
+  end;
   SelectedCount:=SelectedRemoteMonitorCount;
 
   // Multi-monitor display is independent from fullscreen. With two or more
@@ -2235,9 +2333,12 @@ begin
   // F11 is reserved by the CLIENT for full screen; other function keys go to the remote host.
   if Key = VK_F11 then
   begin
-    ToggleFullScreen;
-    Key := 0;
-    Exit;
+    if not FEmbeddedMode then
+    begin
+      ToggleFullScreen;
+      Key := 0;
+      Exit;
+    end;
   end;
   FLastShift := Shift;
   if not ControlAllowed or not FKeyboardFocus then Exit;
@@ -2260,8 +2361,11 @@ procedure TKvmViewForm.RemoteKeyUp(Sender: TObject;
 begin
   if Key = VK_F11 then
   begin
-    Key := 0;
-    Exit;
+    if not FEmbeddedMode then
+    begin
+      Key := 0;
+      Exit;
+    end;
   end;
   FLastShift := Shift;
   if not ControlAllowed or not FKeyboardFocus then Exit;
