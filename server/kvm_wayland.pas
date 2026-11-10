@@ -137,6 +137,9 @@ begin
   if (VKey = 0) or (VKey > 255) then
     raise Exception.Create('Portal: invalid keyboard key.');
   Sym := KvmKeysym(VKey);
+  // NotifyKeyboardKeysym expects the logical XKB AltGr modifier, not Alt_R
+  // (which may be absent or act as ordinary Alt in the remote layout).
+  if VKey = $a5 then Sym := $fe03; // ISO_Level3_Shift
   if Sym = 0 then
     raise Exception.Create('Portal: key has no Wayland keysym mapping.');
   if not WaylandAlive then

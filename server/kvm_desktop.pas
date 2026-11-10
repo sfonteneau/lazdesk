@@ -28,6 +28,14 @@ uses SysUtils, kvm_monitors, kvm_session_guard,
 var
   Backend: string = 'auto';
   IsPortal, UseDxgi, RequireDxgi: Boolean;
+  {$IFDEF LINUX}
+  // Windows emits a synthetic Ctrl key around AltGr (right Alt). X11 and
+  // Wayland must not see that Ctrl while Level3 is active: otherwise @/#/|
+  // turn into control sequences instead of text. Track only keys injected
+  // by this server, never the local Linux user's physical keyboard.
+  LinuxAltGrHeld: Boolean = False;
+  LinuxCtrlHeld: array[0..2] of Boolean;
+  {$ENDIF}
   {$IFDEF WINDOWS}LastCaptureCursorEmbedded: Boolean;{$ENDIF}
   RequestedFPS: Integer = 3;
 // The native portal and SCK bridges currently accept only 1..30 FPS.
@@ -43,6 +51,8 @@ begin
   Backend := Options.Backend; RequestedFPS := Options.FPS;
   Reason := ''; Result := True;
   {$IFDEF LINUX}
+  LinuxAltGrHeld := False;
+  FillChar(LinuxCtrlHeld, SizeOf(LinuxCtrlHeld), 0);
   IsPortal := (Backend = 'portal') or ((Backend = 'auto') and
     ((LowerCase(GetEnvironmentVariable('XDG_SESSION_TYPE')) = 'wayland') or
      (GetEnvironmentVariable('WAYLAND_DISPLAY') <> '')));
@@ -84,7 +94,13 @@ begin
   {$IFDEF DARWIN}kvm_capture_mac.CloseCapture;{$ENDIF}
 end;
 procedure ReleaseDesktop;
-begin {$IFDEF LINUX}CloseWayland;{$ENDIF} end;
+begin
+  {$IFDEF LINUX}
+  CloseWayland;
+  LinuxAltGrHeld := False;
+  FillChar(LinuxCtrlHeld, SizeOf(LinuxCtrlHeld), 0);
+  {$ENDIF}
+end;
 function DesktopBackendName: string;
 begin
   {$IFDEF WINDOWS}
@@ -190,10 +206,85 @@ begin
   {$IFDEF LINUX}if IsPortal then WaylandText(CodePoint) else kvm_inject_x11.InjectText(CodePoint);{$ENDIF}
   {$IFDEF DARWIN}kvm_inject_mac.InjectText(CodePoint);{$ENDIF}
 end;
+{$IFDEF LINUX}
+procedure LinuxRawKey(Pressed: Boolean; VKey: Word);
+begin
+  if IsPortal then WaylandKey(Pressed,VKey)
+  else kvm_inject_x11.InjectKey(Pressed,VKey);
+end;
+
+function LinuxCtrlIndex(VKey: Word): Integer;
+begin
+  case VKey of
+    $11: Result := 0;  // VK_CONTROL, includes Windows synthetic Ctrl
+    $a2: Result := 1;  // VK_LCONTROL
+    $a3: Result := 2;  // VK_RCONTROL
+  else
+    Result := -1;
+  end;
+end;
+{$ENDIF}
+
 procedure InjectKey(Pressed: Boolean; VKey: Word);
+{$IFDEF LINUX}
+const CtrlVK: array[0..2] of Word = ($11,$a2,$a3);
+var
+  Index, I: Integer;
+  Suspended: array[0..2] of Boolean;
+  RestoreFailed: Boolean;
+{$ENDIF}
 begin
   {$IFDEF WINDOWS}kvm_inject_win.InjectKey(Pressed,VKey);{$ENDIF}
-  {$IFDEF LINUX}if IsPortal then WaylandKey(Pressed,VKey) else kvm_inject_x11.InjectKey(Pressed,VKey);{$ENDIF}
+  {$IFDEF LINUX}
+  Index := LinuxCtrlIndex(VKey);
+  if Index >= 0 then
+  begin
+    // A Ctrl key can be logically held while AltGr is active. Do not
+    // synthesize it in the compositor until the AltGr key is released.
+    if not LinuxAltGrHeld then LinuxRawKey(Pressed,VKey);
+    LinuxCtrlHeld[Index] := Pressed;
+    Exit;
+  end;
+  if VKey = $a5 then // VK_RMENU / AltGr (normalized by the Windows client)
+  begin
+    if Pressed then
+    begin
+      if LinuxAltGrHeld then Exit; // Ignore modifier autorepeat.
+      FillChar(Suspended,SizeOf(Suspended),0);
+      try
+        for I := Low(CtrlVK) to High(CtrlVK) do
+          if LinuxCtrlHeld[I] then
+          begin
+            LinuxRawKey(False,CtrlVK[I]);
+            Suspended[I] := True;
+          end;
+        LinuxRawKey(True,$a5);
+        LinuxAltGrHeld := True;
+      except
+        // The modifier key-down failed: restore every Ctrl that we released.
+        for I := High(CtrlVK) downto Low(CtrlVK) do
+          if Suspended[I] and LinuxCtrlHeld[I] then
+            try LinuxRawKey(True,CtrlVK[I]); except end;
+        raise;
+      end;
+    end
+    else
+    begin
+      if not LinuxAltGrHeld then Exit;
+      LinuxRawKey(False,$a5);
+      LinuxAltGrHeld := False;
+      RestoreFailed := False;
+      for I := Low(CtrlVK) to High(CtrlVK) do
+        if LinuxCtrlHeld[I] then
+          try LinuxRawKey(True,CtrlVK[I]);
+          except RestoreFailed := True; end;
+      if RestoreFailed then
+        raise Exception.Create('Could not restore Ctrl after AltGr');
+    end;
+    Exit;
+  end;
+  LinuxRawKey(Pressed,VKey);
+  {$ENDIF}
   {$IFDEF DARWIN}kvm_inject_mac.InjectKey(Pressed,VKey);{$ENDIF}
 end;
 procedure InjectWheel(Notches: SmallInt);

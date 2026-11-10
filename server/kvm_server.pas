@@ -1307,7 +1307,14 @@ begin
           // An OS call can fail after partial injection; counts refer only
           // to fully submitted Unicode scalars, not verified application text.
           if Applied>0 then Status:=KVM_INPUT_PARTIAL else Status:=KVM_INPUT_FAILED;
-          WriteLn('[input] Commit interrupted (content not logged)');
+          // Report the XKB failure category without ever logging user
+          // text or individual code points (Unicode commits are private).
+          if Pos('Character not present in the active XKB layout',E.Message)>0 then
+            WriteLn('[input] Unicode text rejected: symbol absent from current XKB group (content not logged)')
+          else if Pos('Required XKB text modifier unavailable',E.Message)>0 then
+            WriteLn('[input] Unicode text rejected: XKB modifier unavailable (content not logged)')
+          else
+            WriteLn('[input] Commit interrupted (content not logged)');
         end;
       end;
     end;

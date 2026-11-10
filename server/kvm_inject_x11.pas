@@ -97,10 +97,32 @@ begin
   Result := False;
 end;
 
+// XTest delivers keyboard *events*, not characters. Before typing a Unicode
+// code point, temporarily release pressed text-affecting modifiers (including
+// a Ctrl that Windows may have synthesized for AltGr). Otherwise the remote
+// application sees Ctrl+AltGr+key instead of the requested symbol. Restore
+// exactly the keys we released, even when a subsequent XTest call fails.
+// Never alter the X server keymap or the remote clipboard to type text.
+const
+  TextModifierSyms: array[0..14] of CULong = (
+    $ffe1, $ffe2, // Shift_L, Shift_R
+    $ffe3, $ffe4, // Control_L, Control_R
+    $ffe7, $ffe8, // Meta_L, Meta_R
+    $ffe9, $ffea, // Alt_L, Alt_R
+    $ffeb, $ffec, // Super_L, Super_R
+    $ffed, $ffee, // Hyper_L, Hyper_R
+    $fe03, $fe11, // ISO_Level3_Shift (AltGr), ISO_Level5_Shift
+    $ff7e);       // Mode_switch (older AltGr configurations)
+
 procedure InjectText(CodePoint: Cardinal);
 var
   D: Pointer; Sym: CULong; FoundCode, FoundLevel: CInt;
-  ShiftKey, Level3Key: Byte; State: TXkbState; ShiftDown, Level3Down, CleanupOK: Boolean;
+  ShiftKey, Level3Key, ModCode: Byte;
+  State: TXkbState;
+  ShiftDown, Level3Down, KeyDown, CapsChanged, CleanupOK, AlreadyListed: Boolean;
+  PressedMap: array[0..31] of AnsiChar;
+  ReleasedMods: array[0..14] of Byte;
+  ReleasedCount, I, J: Integer;
 begin
   if (CodePoint < 32) or (CodePoint > $10ffff) or
      ((CodePoint >= $d800) and (CodePoint <= $dfff)) then Exit;
@@ -109,7 +131,8 @@ begin
   try
     if D = nil then raise Exception.Create('X11 inaccessible');
     FillChar(State, SizeOf(State), 0);
-    if XkbGetState(D, $100, State) <> 0 then raise Exception.Create('Etat XKB inaccessible'); // XkbUseCoreKbd
+    if XkbGetState(D, $100, State) <> 0 then
+      raise Exception.Create('XKB state unavailable'); // XkbUseCoreKbd
     if not FindXkbSymbol(D, State.group, Sym, FoundCode, FoundLevel) then
     begin
       // Some X11 layouts expose EuroSign only as the legacy $20ac keysym.
@@ -118,35 +141,78 @@ begin
         FoundCode := 0;
     end;
     if FoundCode = 0 then
-    begin
-      // Do NOT silently type a different symbol or rewrite the user's keymap.
-      raise Exception.Create('Character not present in the active XKB layout.');
-    end;
+      raise Exception.Create('Character not present in the active XKB layout');
     ShiftKey := XKeysymToKeycode(D, $ffe1);
     Level3Key := XKeysymToKeycode(D, $fe03);
     if (((FoundLevel and 1) <> 0) and (ShiftKey = 0)) or
        (((FoundLevel and 2) <> 0) and (Level3Key = 0)) then
-      raise Exception.Create('Required XKB modifier unavailable.');
-    // CapsLock would otherwise invert upper/lowercase. Restore it afterward.
-    if XkbLockModifiers(D,$100,2,0)=0 then raise Exception.Create('CapsLock XKB inaccessible');
-    ShiftDown:=False; Level3Down:=False;
+      raise Exception.Create('Required XKB text modifier unavailable');
+
+    // Snapshot actual X11 key state, rather than trusting only the virtual
+    // keys tracked by the network client (which may lose a key-up event).
+    if XQueryKeymap(D, @PressedMap[0]) = 0 then
+      raise Exception.Create('X11 key state unavailable');
+    ShiftDown := False; Level3Down := False; KeyDown := False;
+    CapsChanged := False; ReleasedCount := 0;
     try
-      if (FoundLevel and 1)<>0 then
-      begin ShiftDown:=XTestFakeKeyEvent(D,ShiftKey,1,0)<>0; if not ShiftDown then raise Exception.Create('Shift key rejected'); end;
-      if (FoundLevel and 2)<>0 then
-      begin Level3Down:=XTestFakeKeyEvent(D,Level3Key,1,0)<>0; if not Level3Down then raise Exception.Create('AltGr key rejected'); end;
-      try
-        if XTestFakeKeyEvent(D,FoundCode,1,0)=0 then raise Exception.Create('XTest text input rejected');
-      finally
-        if XTestFakeKeyEvent(D,FoundCode,0,0)=0 then raise Exception.Create('Text key release rejected');
+      // Preserve CapsLock exactly. Do not permanently toggle the user's
+      // lock state as a side effect of inserting text.
+      if XkbLockModifiers(D, $100, 2, 0) = 0 then
+        raise Exception.Create('CapsLock XKB unavailable');
+      CapsChanged := True;
+      for I := Low(TextModifierSyms) to High(TextModifierSyms) do
+      begin
+        ModCode := XKeysymToKeycode(D, TextModifierSyms[I]);
+        if (ModCode = 0) or
+           ((Ord(PressedMap[ModCode div 8]) and
+              (1 shl (ModCode mod 8))) = 0) then Continue;
+        AlreadyListed := False;
+        for J := 0 to ReleasedCount-1 do
+          if ReleasedMods[J] = ModCode then
+          begin AlreadyListed := True; Break; end;
+        if AlreadyListed then Continue;
+        if XTestFakeKeyEvent(D, ModCode, 0, 0) = 0 then
+          raise Exception.Create('Could not suspend X11 text modifier');
+        ReleasedMods[ReleasedCount] := ModCode;
+        Inc(ReleasedCount);
       end;
+      if (FoundLevel and 1) <> 0 then
+      begin
+        if XTestFakeKeyEvent(D, ShiftKey, 1, 0) = 0 then
+          raise Exception.Create('XTest Shift key rejected');
+        ShiftDown := True;
+      end;
+      if (FoundLevel and 2) <> 0 then
+      begin
+        if XTestFakeKeyEvent(D, Level3Key, 1, 0) = 0 then
+          raise Exception.Create('XTest AltGr key rejected');
+        Level3Down := True;
+      end;
+      if XTestFakeKeyEvent(D, FoundCode, 1, 0) = 0 then
+        raise Exception.Create('XTest text input rejected');
+      KeyDown := True;
+      if XTestFakeKeyEvent(D, FoundCode, 0, 0) = 0 then
+        raise Exception.Create('XTest text key release rejected');
+      KeyDown := False;
     finally
-      CleanupOK:=True;
-      if Level3Down then if XTestFakeKeyEvent(D,Level3Key,0,0)=0 then CleanupOK:=False;
-      if ShiftDown then if XTestFakeKeyEvent(D,ShiftKey,0,0)=0 then CleanupOK:=False;
-      if XkbLockModifiers(D,$100,2,State.locked_mods and 2)=0 then CleanupOK:=False;
+      CleanupOK := True;
+      // Retry an unsuccessful key-up before restoring Ctrl/Alt modifiers.
+      if KeyDown then
+        if XTestFakeKeyEvent(D, FoundCode, 0, 0) = 0 then CleanupOK := False;
+      if Level3Down then
+        if XTestFakeKeyEvent(D, Level3Key, 0, 0) = 0 then CleanupOK := False;
+      if ShiftDown then
+        if XTestFakeKeyEvent(D, ShiftKey, 0, 0) = 0 then CleanupOK := False;
+      // Restore in reverse order so Ctrl+AltGr, Shift and Meta combinations
+      // return to their pre-injection state. Do not lose a partial cleanup.
+      for I := ReleasedCount-1 downto 0 do
+        if XTestFakeKeyEvent(D, ReleasedMods[I], 1, 0) = 0 then CleanupOK := False;
+      if CapsChanged then
+        if XkbLockModifiers(D, $100, 2, State.locked_mods and 2) = 0 then
+          CleanupOK := False;
       XFlush(D);
-      if not CleanupOK then raise Exception.Create('Could not fully restore XKB modifiers');
+      if not CleanupOK then
+        raise Exception.Create('Could not fully restore X11 text modifiers');
     end;
   finally UnlockX11; end;
 end;
@@ -252,8 +318,12 @@ begin
     begin
       Symbol:=KvmKeysym(VKey);
       if Symbol=0 then raise Exception.Create('Key not mapped on X11');
-      KeyCode:=XKeysymToKeycode(D,Symbol);
-      if (KeyCode=0) and (VKey=$a5) then KeyCode:=XKeysymToKeycode(D,$fe03);
+      // Right Alt from an AltGr keyboard is the XKB Level3 modifier.
+      // The French layout often has no Alt_R keysym at all; requesting
+      // ISO_Level3_Shift first also avoids selecting a plain Alt keycode.
+      if VKey=$a5 then KeyCode:=XKeysymToKeycode(D,$fe03)
+      else KeyCode:=0;
+      if KeyCode=0 then KeyCode:=XKeysymToKeycode(D,Symbol);
     end;
     if KeyCode=0 then raise Exception.Create('Key not present on the remote keyboard');
     if XTestFakeKeyEvent(D,KeyCode,Ord(Pressed),0)=0 then raise Exception.Create('XTest rejected the key');

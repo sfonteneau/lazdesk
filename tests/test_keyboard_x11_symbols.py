@@ -21,7 +21,7 @@ KEYS = (ROOT / 'shared/kvm_keysym.pas').read_text()
 assert 'FindXkbSymbol(D, State.group, Sym, FoundCode, FoundLevel)' in INJECT
 assert 'XkbKeycodeToKeysym(D, Byte(Code), Group, Level) = Symbol' in INJECT
 assert 'FoundLevel and 1' in INJECT and 'FoundLevel and 2' in INJECT
-assert 'XTestFakeKeyEvent(D,Level3Key,1,0)' in INJECT
+assert 'XTestFakeKeyEvent(D, Level3Key, 1, 0)' in INJECT
 assert 'CodePoint <> $20ac' in INJECT and 'FindXkbSymbol(D, State.group, $20ac' in INJECT
 assert 'InjectExtraOemKey(D, Pressed, VKey)' in INJECT
 assert 'HeldOemShift[VKey] := AddedShift' in INJECT

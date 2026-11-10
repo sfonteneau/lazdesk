@@ -71,6 +71,9 @@ type
     FLastHeartbeat: QWord;
     FLastShift: TShiftState;
     FSuppressedKeys, FForwardedKeys: array[0..255] of Boolean;
+    // A Windows AltGr key can arrive as VK_MENU rather than VK_RMENU.
+    // Remember the actual VK sent so that the key-up matches its key-down.
+    FForwardedVirtualKeys: array[0..255] of Byte;
     FMouseButtons: Byte;
     FWheelRemainder: Integer;
     FDesktopPaused: Boolean;
@@ -253,6 +256,7 @@ begin
   FLastHeartbeat := 0;
   FLastShift := [];
   FillChar(FSuppressedKeys, SizeOf(FSuppressedKeys), 0);
+  FillChar(FForwardedVirtualKeys, SizeOf(FForwardedVirtualKeys), 0);
   FCursorVisible := False;
   FRemoteCursorOverlay := False;
   FRemoteLayoutW := 0; FRemoteLayoutH := 0;
@@ -1506,6 +1510,7 @@ procedure TKvmViewForm.ResetLocalInputs;
 begin
   FillChar(FSuppressedKeys, SizeOf(FSuppressedKeys), 0);
   FillChar(FForwardedKeys, SizeOf(FForwardedKeys), 0);
+  FillChar(FForwardedVirtualKeys, SizeOf(FForwardedVirtualKeys), 0);
   FMouseButtons := 0; FWheelRemainder := 0; FLastShift := [];
   FPendingMouseMove := False; FLastMouseTick := 0;
   FMouseEchoNext := 0; FillChar(FMouseEchoes,SizeOf(FMouseEchoes),0);
@@ -2371,6 +2376,7 @@ procedure TKvmViewForm.RemoteKeyDown(Sender: TObject;
   var Key: Word; Shift: TShiftState);
 var
   Shortcut: Boolean;
+  ForwardKey: Word;
 begin
   // F11 is reserved by the CLIENT for full screen; other function keys go to the remote host.
   if Key = VK_F11 then
@@ -2393,8 +2399,22 @@ begin
     FSuppressedKeys[Key] := True;
     Exit; // Wait for OnUTF8KeyPress: AZERTY, accents and Unicode.
   end;
+  ForwardKey := Key;
+  {$IFDEF WINDOWS}
+  // Windows AltGr is *right* Alt, often reported to the LCL form as
+  // generic VK_MENU ($12). Send VK_RMENU ($a5) to distinguish it from
+  // genuine left Alt / Ctrl+Alt. Linux maps VK_RMENU to XKB Level3.
+  // In particular, do not guess AltGr from Ctrl+Alt alone.
+  if (Key in [$12,$a5]) and (KvmWinGetKeyState($a5) < 0) then
+    ForwardKey := $a5;
+  {$ENDIF}
+  // Auto-repeat must retain the VK of the first key-down, even if the
+  // widgetset reports a different modifier state during the repeat.
+  if FForwardedKeys[Key] and (FForwardedVirtualKeys[Key] <> 0) then
+    ForwardKey := FForwardedVirtualKeys[Key];
   FForwardedKeys[Key] := True;
-  SendPacket(MakeKey(True, Key));
+  FForwardedVirtualKeys[Key] := Byte(ForwardKey);
+  SendPacket(MakeKey(True, ForwardKey));
   Key := 0;
 end;
 
@@ -2414,9 +2434,27 @@ begin
   if (ActiveControl = FHost) or (ActiveControl = FPort) or
      (ActiveControl = FToken) then Exit;
   if (Key=0) or (Key>255) then Exit;
+  {$IFDEF WINDOWS}
+  // Some Windows widgetsets report a generic VK_MENU key-down but a
+  // VK_RMENU key-up (or vice versa). Release the actual forwarded VK.
+  if (Key in [$12,$a5]) and not FForwardedKeys[Key] then
+  begin
+    if FForwardedKeys[$12] and (FForwardedVirtualKeys[$12]=$a5) then
+      Key := $12
+    else if FForwardedKeys[$a5] and (FForwardedVirtualKeys[$a5]=$a5) then
+      Key := $a5;
+  end;
+  {$ENDIF}
   // A key first suppressed as text may later repeat as a Ctrl shortcut.
   // Always release a forwarded down, even when the suppression flag is set.
-  if FForwardedKeys[Key] then SendPacket(MakeKey(False, Key));
+  if FForwardedKeys[Key] then
+  begin
+    if FForwardedVirtualKeys[Key] <> 0 then
+      SendPacket(MakeKey(False, FForwardedVirtualKeys[Key]))
+    else
+      SendPacket(MakeKey(False, Key));
+  end;
+  FForwardedVirtualKeys[Key] := 0;
   FForwardedKeys[Key] := False; FSuppressedKeys[Key] := False;
   Key := 0;
 end;
