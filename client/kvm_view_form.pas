@@ -171,7 +171,7 @@ type
     procedure EnableEmbeddedMode;
     procedure Connect;
     procedure Disconnect;
-    procedure RequestControl(Enabled: Boolean);
+    procedure RequestControl(AEnabled: Boolean);
     procedure RefreshDesktop;
     procedure ReleaseLocalInputs;
     function Connected: Boolean;
@@ -461,12 +461,12 @@ begin
   if not FClosing then DisconnectClick(nil);
 end;
 
-procedure TKvmViewForm.RequestControl(Enabled: Boolean);
+procedure TKvmViewForm.RequestControl(AEnabled: Boolean);
 begin
   if FClosing or not FAuthorized then Exit;
-  if Enabled and not FControl.Enabled then Exit;
-  if FControl.Checked = Enabled then Exit;
-  FControl.Checked := Enabled;
+  if AEnabled and not FControl.Enabled then Exit;
+  if FControl.Checked = AEnabled then Exit;
+  FControl.Checked := AEnabled;
   ControlClick(nil);
 end;
 

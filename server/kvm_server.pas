@@ -84,6 +84,7 @@ type
     function RegisterClient(ID: THttpServerConnectionID): Integer;
     procedure HandleIncoming(ID: THttpServerConnectionID;
       const Frame: TWebSocketFrame);
+  private  // Fields after methods require a new visibility section
     FWorker: TCaptureThread;
     FEncoderWorker: TEncodeThread;
     FClipboardWorker: TKvmClipboardServerWorker;
@@ -1415,7 +1416,7 @@ end;
 
 procedure TKvmServer.HandleClipboardFrame(ID: THttpServerConnectionID; const Packet: RawByteString);
 var Req: TKvmClipRequest; R: TKvmClipReply; I: Integer;
-  ID: THttpServerConnectionID; Valid: Boolean; NowTick: QWord;
+  Valid: Boolean; NowTick: QWord;
 begin
   if not ReadClipRequest(Packet,Req) then begin BadPacket(ID); Exit; end;
   NowTick:=GetTickCount64; Valid:=False;
