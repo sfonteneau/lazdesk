@@ -1,0 +1,42 @@
+program test_clipboard_wire;
+{$mode objfpc}{$H+}{$B-}{$R+}{$Q+}
+uses SysUtils,kvm_clipboard_wire;
+var R,R2: TKvmClipRequest; A,A2: TKvmClipReply; S,T: RawByteString; I: Integer;
+procedure Check(B: Boolean; const Name: string);
+begin if not B then raise Exception.Create('FAIL: '+Name); end;
+begin
+  Check(ClipboardTextValid(''),'empty');
+  Check(ClipboardTextValid('ABC'#9#10),'ASCII controls as text');
+  Check(ClipboardTextValid(#$c3#$a9#$f0#$9f#$98#$80),'UTF8 accents/emoji');
+  Check(not ClipboardTextValid(#0),'NUL');
+  Check(not ClipboardTextValid(#$c0#$80),'overlong');
+  Check(not ClipboardTextValid(#$ed#$a0#$80),'surrogate');
+  Check(not ClipboardTextValid(#$f4#$90#$80#$80),'past Unicode');
+  Check(not ClipboardTextValid(#$80),'stray continuation');
+  Check(not ClipboardTextValid(#$e2#$82),'truncated');
+  Check(CanonicalClipboardText('a'#13#10'b'#13'c'#10,T) and (T='a'#10'b'#10'c'#10),'newlines');
+  Check(ClipNextSerial(High(Cardinal))=1,'wrap');
+  R.Epoch:=3; R.Serial:=1; R.Flags:=3; R.KnownReadSerial:=0;
+  R.Text:='a'#10#$c3#$a9#$f0#$9f#$98#$80;
+  S:=MakeClipRequest(R); Check(ReadClipRequest(S,R2),'request');
+  Check((R2.Text=R.Text) and (R2.Flags=3) and (R2.Epoch=3),'request values');
+  for I:=0 to KVM_CLIP_REQUEST_HEADER-1 do Check(not ReadClipRequest(Copy(S,1,I),R2),'truncated request');
+  S[11]:=#4; Check(not ReadClipRequest(S,R2),'bad direction');
+  R.Flags:=2; R.Text:=''; S:=MakeClipRequest(R); Check(ReadClipRequest(S,R2),'read only');
+  Check(not ReadClipRequest(S+'secret',R2),'no hidden write');
+  R.Flags:=1; R.Text:=''; Check(ReadClipRequest(MakeClipRequest(R),R2),'empty write is valid');
+  R.Text:=StringOfChar('x',KVM_CLIP_MAX_BYTES); Check(ReadClipRequest(MakeClipRequest(R),R2),'64 KiB');
+  R.Text:=R.Text+'x'; Check(MakeClipRequest(R)='','oversize builder');
+  Check(not ReadClipRequest(S+StringOfChar('x',KVM_CLIP_MAX_BYTES+1),R2),'oversize reader');
+  R.Text:='test'; R.Serial:=0; Check(MakeClipRequest(R)='','zero serial');
+  R.Serial:=1; R.Epoch:=0; Check(MakeClipRequest(R)='','zero epoch');
+  A.Epoch:=4; A.Serial:=5; A.WriteResult:=crSkip; A.ReadResult:=crOk; A.HasText:=True; A.Text:='';
+  S:=MakeClipReply(A); Check(ReadClipReply(S,A2) and A2.HasText and (A2.Text=''),'empty reply');
+  A.Text:=#$c3#$a9#10; S:=MakeClipReply(A); Check(ReadClipReply(S,A2) and (A2.Text=A.Text),'unicode reply');
+  for I:=0 to KVM_CLIP_REPLY_HEADER-1 do Check(not ReadClipReply(Copy(S,1,I),A2),'truncated reply');
+  S[13]:=#0; Check(not ReadClipReply(S,A2),'text without flag');
+  A.HasText:=False; A.Text:=''; A.ReadResult:=crUnchanged; S:=MakeClipReply(A);
+  Check(ReadClipReply(S,A2) and not A2.HasText,'unchanged');
+  S[12]:=#255; Check(not ReadClipReply(S,A2),'invalid result');
+  Writeln('PASS: actual Pascal clipboard wire, UTF8 and bounds');
+end.

@@ -1,0 +1,163 @@
+<?xml version='1.0' encoding='utf-8'?>
+<CONFIG>
+  <ProjectOptions>
+    <Version Value="12" />
+    <General>
+      <Flags>
+        <MainUnitHasCreateFormStatements Value="False" />
+        <MainUnitHasTitleStatement Value="False" />
+      </Flags>
+      <SessionStorage Value="InProjectDir" />
+      <Title Value="LazDeskServer" />
+      <UseAppBundle Value="False" />
+    </General>
+    <BuildModes>
+      <Item Name="Default" Default="True" />
+    </BuildModes>
+    <RunParams>
+      <FormatVersion Value="2" />
+    </RunParams>
+    <RequiredPackages>
+      <Item>
+        <PackageName Value="mormot2" />
+      </Item>
+    </RequiredPackages>
+    <Units>
+      <Unit>
+        <Filename Value="LazDeskServer.lpr" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="kvm_server.pas" />
+      </Unit>
+      <Unit>
+        <Filename Value="kvm_desktop.pas" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_frame.pas" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_cli.pas" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_wire.pas" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_flow.pas" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_damage.pas" />
+      </Unit>
+      <Unit>
+        <Filename Value="kvm_turbojpeg.pas" />
+      </Unit>
+      <Unit>
+        <Filename Value="kvm_jpeg_batch.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="kvm_video.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="kvm_monitors.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_adaptive.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_geometry.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_mouse_state.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="kvm_transport.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="kvm_wayland.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="kvm_capture_dxgi.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="kvm_cursor_x11.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="kvm_windows_session.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_cursor.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_keysym.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="kvm_session_guard.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="kvm_metrics.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_extwire.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_security.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_codec.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_schedule.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_clipboard_wire.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_clipboard_base.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_clipboard_native.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="../shared/kvm_clipboard_server_worker.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+    </Units>
+  </ProjectOptions>
+  <CompilerOptions>
+    <Version Value="11" />
+    <Target>
+      <Filename Value="LazDeskServer" />
+    </Target>
+    <SearchPaths>
+      <OtherUnitFiles Value="../shared" />
+      <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)" />
+    </SearchPaths>
+    <CodeGeneration>
+      <Optimizations>
+        <OptimizationLevel Value="2" />
+      </Optimizations>
+    </CodeGeneration>
+  </CompilerOptions>
+</CONFIG>
