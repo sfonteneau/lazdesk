@@ -48,6 +48,10 @@ def main() -> int:
     ranges_fn = bind(x, 'XDisplayKeycodes', [P, C.POINTER(I), C.POINTER(I)], I)
     xtest_fn = bind(xt, 'XTestQueryExtension', [P, C.POINTER(I), C.POINTER(I),
                                                  C.POINTER(I), C.POINTER(I)], I)
+    mapping_fn = bind(x, 'XGetKeyboardMapping', [P, C.c_ubyte, I,
+                                                C.POINTER(I)], C.POINTER(UL))
+    free_fn = bind(x, 'XFree', [P], I)
+    keymap_fn = bind(x, 'XQueryKeymap', [P, P], I)
     d = op(None)
     if not d:
         print('ERROR: cannot open X11 display. Run as the same desktop '
@@ -84,13 +88,39 @@ def main() -> int:
                 mod = ['none', 'Shift', 'AltGr', 'Shift+AltGr'][level]
                 print(f'{ch}: keycode={code}, XKB level={level}, modifier={mod}')
         if missing:
-            print('Warning: symbols missing from the active XKB group:',
-                  ''.join(missing))
-            return 1
-        if not xtest_ok:
-            return 1
-        print('OK: all four symbols can be resolved in the active XKB group.')
-        return 0
+            print('Missing from active group:', ''.join(missing))
+            print('A corrected LazDesk X11 server can inject those symbols '
+                  'using an unassigned keycode temporarily.')
+            width = I()
+            mapping = mapping_fn(d, lo.value, hi.value-lo.value+1, C.byref(width))
+            if not mapping:
+                print('ERROR: X11 keyboard map cannot be read.', file=sys.stderr)
+                return 1
+            pressed = C.create_string_buffer(32)
+            try:
+                if not keymap_fn(d, pressed):
+                    print('ERROR: X11 key state cannot be read.', file=sys.stderr)
+                    return 1
+                spare = None
+                if 0 < width.value <= 64:
+                    for code in range(hi.value, lo.value-1, -1):
+                        if pressed.raw[code//8] & (1 << (code%8)):
+                            continue
+                        if all(mapping[(code-lo.value)*width.value+i] == 0
+                               for i in range(width.value)) and all(
+                                sym_fn(d, code, group, level) == 0
+                                for group in range(4) for level in range(8)):
+                            spare = code
+                            break
+                if spare is None:
+                    print('ERROR: no unused X11 keycode available for Unicode fallback.')
+                    return 1
+                print('Unicode fallback: available (unused keycode {})'.format(spare))
+            finally:
+                free_fn(mapping)
+        else:
+            print('OK: all four symbols can be resolved in the active XKB group.')
+        return 0 if xtest_ok else 1
     finally:
         close(d)
 

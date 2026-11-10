@@ -97,12 +97,82 @@ begin
   Result := False;
 end;
 
+// The X11 core protocol has no "type Unicode" request: XTest sends only
+// keycodes. An active XKB group does not necessarily contain every printable
+// symbol (particularly with international layouts). For a missing symbol,
+// temporarily borrow an *unassigned* keycode, and restore its exact original
+// mapping immediately afterwards. This is the same fallback family used by
+// xdotool for unmapped keysyms; never overwrite a real or pressed key.
+// XChangeKeyboardMapping changes the X server's map globally for a very short
+// time. Keep the binding until the target app has had a chance to process the
+// generated KeyPress; restoring it in the same X11 roundtrip would result in a
+// keycode with NoSymbol on clients that process input after the restoration.
+type
+  TXkbScratchSyms = array[0..63] of CULong;
+  // At most 248 X11 keycodes times 64 keysyms per code (15616 entries).
+  TXkbAllSyms = array[0..16383] of CULong;
+  PXkbAllSyms = ^TXkbAllSyms;
+
+function FindUnusedXkbKey(D: Pointer; const PressedMap: array of AnsiChar;
+  out Scratch: Byte; out PerCode: CInt;
+  out Original: TXkbScratchSyms): Boolean;
+var
+  MinCode, MaxCode, Candidate, I, J, VKey, Col: CInt;
+  Mapped, Reserved: Boolean;
+  Symbols: PKeySym;
+begin
+  Result := False; Scratch := 0; PerCode := 0;
+  XDisplayKeycodes(D, MinCode, MaxCode);
+  if (MinCode < 8) or (MaxCode > 255) or (MaxCode < MinCode) then
+    raise Exception.Create('Invalid X11 keycode range for Unicode fallback');
+  Symbols := XGetKeyboardMapping(D, Byte(MinCode), MaxCode-MinCode+1, PerCode);
+  if Symbols = nil then
+    raise Exception.Create('Cannot read X11 keyboard mapping for Unicode fallback');
+  try
+    if (PerCode < 1) or (PerCode > Length(Original)) then
+      raise Exception.Create('Unsupported X11 mapping width for Unicode fallback');
+    for Candidate := MaxCode downto MinCode do
+    begin
+      // Never remap a key which is physically pressed or held by a client.
+      if (Ord(PressedMap[Candidate div 8]) and
+          (1 shl (Candidate mod 8))) <> 0 then Continue;
+      Reserved := False;
+      for VKey := 0 to High(HeldCodes) do
+        if HeldCodes[VKey] = Candidate then
+        begin Reserved := True; Break; end;
+      if Reserved then Continue;
+      Mapped := False;
+      for Col := 0 to PerCode-1 do
+        if PXkbAllSyms(Symbols)^[(Candidate-MinCode)*PerCode+Col] <> 0 then
+        begin Mapped := True; Break; end;
+      if Mapped then Continue;
+      // A core NoSymbol entry can still have an XKB definition: do not
+      // borrow it unless all advertised groups/levels are also empty.
+      for I := 0 to 3 do
+      begin
+        for J := 0 to 7 do
+          if XkbKeycodeToKeysym(D, Byte(Candidate), I, J) <> 0 then
+          begin Mapped := True; Break; end;
+        if Mapped then Break;
+      end;
+      if Mapped then Continue;
+      for Col := 0 to PerCode-1 do
+        Original[Col] := PXkbAllSyms(Symbols)^[(Candidate-MinCode)*PerCode+Col];
+      Scratch := Byte(Candidate);
+      Exit(True);
+    end;
+  finally
+    XFree(Symbols);
+  end;
+end;
+
 // XTest delivers keyboard *events*, not characters. Before typing a Unicode
 // code point, temporarily release pressed text-affecting modifiers (including
 // a Ctrl that Windows may have synthesized for AltGr). Otherwise the remote
 // application sees Ctrl+AltGr+key instead of the requested symbol. Restore
 // exactly the keys we released, even when a subsequent XTest call fails.
-// Never alter the X server keymap or the remote clipboard to type text.
+// For symbols absent from the active XKB layout only, temporarily bind an
+// unused keycode; always restore it afterwards. The clipboard is untouched.
 const
   TextModifierSyms: array[0..14] of CULong = (
     $ffe1, $ffe2, // Shift_L, Shift_R
@@ -117,12 +187,15 @@ const
 procedure InjectText(CodePoint: Cardinal);
 var
   D: Pointer; Sym: CULong; FoundCode, FoundLevel: CInt;
-  ShiftKey, Level3Key, ModCode: Byte;
+  ShiftKey, Level3Key, ModCode, Scratch: Byte;
   State: TXkbState;
-  ShiftDown, Level3Down, KeyDown, CapsChanged, CleanupOK, AlreadyListed: Boolean;
+  ShiftDown, Level3Down, KeyDown, CapsChanged, CleanupOK, AlreadyListed,
+    MappedScratch, ScratchSubmitted: Boolean;
   PressedMap: array[0..31] of AnsiChar;
   ReleasedMods: array[0..14] of Byte;
-  ReleasedCount, I, J: Integer;
+  SavedSyms, TemporarySyms: TXkbScratchSyms;
+  VerifySyms: PKeySym;
+  ReleasedCount, Width, VerifyWidth, I, J: Integer;
 begin
   if (CodePoint < 32) or (CodePoint > $10ffff) or
      ((CodePoint >= $d800) and (CodePoint <= $dfff)) then Exit;
@@ -135,28 +208,36 @@ begin
       raise Exception.Create('XKB state unavailable'); // XkbUseCoreKbd
     if not FindXkbSymbol(D, State.group, Sym, FoundCode, FoundLevel) then
     begin
-      // Some X11 layouts expose EuroSign only as the legacy $20ac keysym.
+      // Some X11 layouts expose EuroSign as the legacy $20ac keysym.
       if (CodePoint <> $20ac) or
          (not FindXkbSymbol(D, State.group, $20ac, FoundCode, FoundLevel)) then
         FoundCode := 0;
     end;
+    // Snapshot actual X11 key state rather than trusting only the network
+    // client's virtual keys (a key-up may have been lost on the network).
+    if XQueryKeymap(D, @PressedMap[0]) = 0 then
+      raise Exception.Create('X11 key state unavailable');
+    Scratch := 0; Width := 0;
     if FoundCode = 0 then
-      raise Exception.Create('Character not present in the active XKB layout');
+    begin
+      // Do not reject @/#/| simply because this Linux XKB group omits them.
+      // The scratch mapping is restored in a finally block below.
+      if not FindUnusedXkbKey(D, PressedMap, Scratch, Width, SavedSyms) then
+        raise Exception.Create('No unused X11 keycode for Unicode fallback');
+      FoundCode := Scratch;
+      FoundLevel := 0;  // the temporary binding needs no Shift or AltGr
+    end;
     ShiftKey := XKeysymToKeycode(D, $ffe1);
     Level3Key := XKeysymToKeycode(D, $fe03);
     if (((FoundLevel and 1) <> 0) and (ShiftKey = 0)) or
        (((FoundLevel and 2) <> 0) and (Level3Key = 0)) then
       raise Exception.Create('Required XKB text modifier unavailable');
 
-    // Snapshot actual X11 key state, rather than trusting only the virtual
-    // keys tracked by the network client (which may lose a key-up event).
-    if XQueryKeymap(D, @PressedMap[0]) = 0 then
-      raise Exception.Create('X11 key state unavailable');
     ShiftDown := False; Level3Down := False; KeyDown := False;
     CapsChanged := False; ReleasedCount := 0;
+    MappedScratch := False; ScratchSubmitted := False;
     try
-      // Preserve CapsLock exactly. Do not permanently toggle the user's
-      // lock state as a side effect of inserting text.
+      // Preserve CapsLock exactly, including when a symbol is missing.
       if XkbLockModifiers(D, $100, 2, 0) = 0 then
         raise Exception.Create('CapsLock XKB unavailable');
       CapsChanged := True;
@@ -176,6 +257,28 @@ begin
         ReleasedMods[ReleasedCount] := ModCode;
         Inc(ReleasedCount);
       end;
+
+      if Scratch <> 0 then
+      begin
+        // XChangeKeyboardMapping returns 0 even when the request succeeds;
+        // synchronize and read back instead of treating 0 as an error.
+        FillChar(TemporarySyms, SizeOf(TemporarySyms), 0);
+        for I := 0 to Width-1 do TemporarySyms[I] := Sym;
+        XChangeKeyboardMapping(D, Scratch, Width, @TemporarySyms[0], 1);
+        MappedScratch := True;
+        XSync(D, 0);
+        VerifySyms := XGetKeyboardMapping(D, Scratch, 1, VerifyWidth);
+        if VerifySyms = nil then
+          raise Exception.Create('Cannot verify temporary X11 Unicode mapping');
+        try
+          if (VerifyWidth < 1) or
+             (PXkbAllSyms(VerifySyms)^[0] <> Sym) then
+            raise Exception.Create('Temporary X11 Unicode mapping rejected');
+        finally
+          XFree(VerifySyms);
+        end;
+      end;
+
       if (FoundLevel and 1) <> 0 then
       begin
         if XTestFakeKeyEvent(D, ShiftKey, 1, 0) = 0 then
@@ -191,20 +294,32 @@ begin
       if XTestFakeKeyEvent(D, FoundCode, 1, 0) = 0 then
         raise Exception.Create('XTest text input rejected');
       KeyDown := True;
+      if Scratch <> 0 then ScratchSubmitted := True;
       if XTestFakeKeyEvent(D, FoundCode, 0, 0) = 0 then
         raise Exception.Create('XTest text key release rejected');
       KeyDown := False;
     finally
       CleanupOK := True;
-      // Retry an unsuccessful key-up before restoring Ctrl/Alt modifiers.
       if KeyDown then
         if XTestFakeKeyEvent(D, FoundCode, 0, 0) = 0 then CleanupOK := False;
       if Level3Down then
         if XTestFakeKeyEvent(D, Level3Key, 0, 0) = 0 then CleanupOK := False;
       if ShiftDown then
         if XTestFakeKeyEvent(D, ShiftKey, 0, 0) = 0 then CleanupOK := False;
-      // Restore in reverse order so Ctrl+AltGr, Shift and Meta combinations
-      // return to their pre-injection state. Do not lose a partial cleanup.
+      if MappedScratch then
+      begin
+        if ScratchSubmitted then
+        begin
+          // Dispatch the key events and allow the focused X11 client to
+          // consume their *temporary* keysym before restoring NoSymbol.
+          // Without this, XLookupString can see an empty mapping instead.
+          XSync(D, 0);
+          Sleep(25);
+        end;
+        XChangeKeyboardMapping(D, Scratch, Width, @SavedSyms[0], 1);
+        XSync(D, 0);
+      end;
+      // Restore exactly the modifiers we suspended, in reverse order.
       for I := ReleasedCount-1 downto 0 do
         if XTestFakeKeyEvent(D, ReleasedMods[I], 1, 0) = 0 then CleanupOK := False;
       if CapsChanged then

@@ -1309,8 +1309,11 @@ begin
           if Applied>0 then Status:=KVM_INPUT_PARTIAL else Status:=KVM_INPUT_FAILED;
           // Report the XKB failure category without ever logging user
           // text or individual code points (Unicode commits are private).
-          if Pos('Character not present in the active XKB layout',E.Message)>0 then
-            WriteLn('[input] Unicode text rejected: symbol absent from current XKB group (content not logged)')
+          if Pos('No unused X11 keycode for Unicode fallback',E.Message)>0 then
+            WriteLn('[input] Unicode text rejected: no unused X11 keycode for temporary mapping (content not logged)')
+          else if (Pos('Temporary X11 Unicode mapping rejected',E.Message)>0) or
+                  (Pos('Cannot verify temporary X11 Unicode mapping',E.Message)>0) then
+            WriteLn('[input] Unicode text rejected: temporary X11 key mapping unavailable (content not logged)')
           else if Pos('Required XKB text modifier unavailable',E.Message)>0 then
             WriteLn('[input] Unicode text rejected: XKB modifier unavailable (content not logged)')
           else
