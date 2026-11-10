@@ -218,9 +218,16 @@ begin
     if XQueryKeymap(D, @PressedMap[0]) = 0 then
       raise Exception.Create('X11 key state unavailable');
     Scratch := 0; Width := 0;
-    if FoundCode = 0 then
+    // Some XKB configurations *advertise* | at XKB level index 2 (AltGr),
+    // but the XTest-generated Level3 modifier does not activate it in the
+    // receiving application. Unlike @ and #, | then bypasses the normal
+    // missing-symbol fallback and silently fails to appear. When | needs
+    // AltGr, use the already existing unassigned-keycode fallback instead.
+    // Layouts where | is directly accessible (e.g. US Shift+\) are unchanged.
+    // In particular, this does not alter any assigned physical keycode.
+    if (FoundCode = 0) or
+       ((CodePoint = Ord('|')) and ((FoundLevel and 2) <> 0)) then
     begin
-      // Do not reject @/#/| simply because this Linux XKB group omits them.
       // The scratch mapping is restored in a finally block below.
       if not FindUnusedXkbKey(D, PressedMap, Scratch, Width, SavedSyms) then
         raise Exception.Create('No unused X11 keycode for Unicode fallback');
