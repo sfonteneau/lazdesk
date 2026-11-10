@@ -104,6 +104,7 @@ begin
   {$IFDEF WINDOWS}
   UseDxgi := False;
   if Backend <> 'gdi' then UseDxgi := CheckDxgi(Reason);
+  WriteLn('[capture] Requested backend=', Backend, '; DXGI enabled=', UseDxgi);
   if RequireDxgi and not UseDxgi then Exit(False);
   Reason := ''; Result := (GetSystemMetrics(SM_CXSCREEN) > 0) and (GetSystemMetrics(SM_CYSCREEN) > 0);
   if not Result then Reason := 'Run in an interactive Windows desktop session';
@@ -143,7 +144,9 @@ begin
   {$IFDEF WINDOWS}
   Result := False; LastCaptureCursorEmbedded := False;
   if not WindowsDesktopAvailable then Exit;
-  if UseDxgi then
+  // Defence in depth: explicit GDI must never invoke the native DXGI bridge,
+  // even if the cached capability flag becomes inconsistent.
+  if (Backend <> 'gdi') and UseDxgi then
   begin
     Result := CaptureDxgi(MaxW,MaxH,Frame);
     LastCaptureCursorEmbedded := Result and DxgiCursorEmbedded;

@@ -674,25 +674,46 @@ end;
 procedure TKvmServer.ExpireIdleClients;
 var
   I, N: Integer;
-  NowTick: QWord;
+  NowTick, IdleMs, AckMs: QWord;
+  AuthTimedOut, IdleTimedOut, AckTimedOut: Boolean;
+  ExpireReason: string;
   ExpiredIDs: THttpServerConnectionIDDynArray;
 begin
-  NowTick := GetTickCount64;
   SetLength(ExpiredIDs, 0);
   EnterCriticalSection(FLock);
   try
+    // Obtain the clock AFTER the lock. Other threads update LastSeen and
+    // flight timestamps under this lock; sampling earlier could underflow
+    // an unsigned QWord subtraction and immediately expire a live session.
+    NowTick := GetTickCount64;
     N := 0;
     for I := High(FClients) downto 0 do
-      if ((not FClients[I].Authenticated) and (NowTick-FClients[I].LastSeen>KVM_AUTH_TIMEOUT_MS)) or
-         (NowTick-FClients[I].LastSeen>KVM_CLIENT_TIMEOUT_MS) or
-         FlowTimedOut(FClients[I].Flow, NowTick) then
+    begin
+      IdleMs := 0;
+      if NowTick >= FClients[I].LastSeen then
+        IdleMs := NowTick - FClients[I].LastSeen;
+      AckMs := 0;
+      if (FClients[I].Flow.FlightCount > 0) and
+         (NowTick >= FClients[I].Flow.Flights[0].SentTick) then
+        AckMs := NowTick - FClients[I].Flow.Flights[0].SentTick;
+      AuthTimedOut := (not FClients[I].Authenticated) and
+        (IdleMs > KVM_AUTH_TIMEOUT_MS);
+      IdleTimedOut := IdleMs > KVM_CLIENT_TIMEOUT_MS;
+      AckTimedOut := FlowTimedOut(FClients[I].Flow, NowTick);
+      if AuthTimedOut or IdleTimedOut or AckTimedOut then
       begin
-        WriteLn('[client] Session expired or ACK missing: ', FClients[I].ID);
+        if AuthTimedOut then ExpireReason := 'auth timeout'
+        else if AckTimedOut then ExpireReason := 'video ACK timeout'
+        else ExpireReason := 'client idle timeout';
+        WriteLn('[client] Session expired: ', FClients[I].ID,
+          ' reason=', ExpireReason, ' idle_ms=', IdleMs,
+          ' ack_ms=', AckMs, ' in_flight=', FClients[I].Flow.FlightCount);
         SetLength(ExpiredIDs, N + 1);
         ExpiredIDs[N] := FClients[I].ID;
         Inc(N);
         RemoveClientLocked(I); // also releases any held keys/buttons
       end;
+    end;
   finally
     LeaveCriticalSection(FLock);
   end;
