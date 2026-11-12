@@ -9,6 +9,8 @@
       <SessionStorage Value="InProjectDir" />
       <Title Value="LazDeskClient" />
       <Scaled Value="True" />
+      <UseAppBundle Value="True" />
+      <NSPrincipalClass Value="TCocoaApplication" />
     </General>
     <i18n>
       <EnableI18N Value="True" LFM="False" />

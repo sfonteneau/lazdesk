@@ -309,10 +309,8 @@ begin
   FDesktopPaused := True;
   WebSocketsMaxFrameMB := 4;
 
-  // Standard Windows menu bar: all user settings
-  // are available here; there is no floating control panel.
+  // Native LCL menu bar (Windows window chrome / macOS Cocoa menu bar).
   FMainMenu:=TMainMenu.Create(Self);
-  Menu:=FMainMenu;
 
   FFileMenu:=TMenuItem.Create(FMainMenu);
   FFileMenu.Caption:='File';
@@ -399,6 +397,9 @@ begin
   FMenuClipFromRemote.Caption:='Remote -> my clipboard';
   FMenuClipFromRemote.OnClick:=@ClipboardMenuClick; FMenuClipboard.Add(FMenuClipFromRemote);
   RebuildMonitorMenu;
+  // Assign only after the full hierarchy exists: Cocoa builds its native
+  // application menu from the form's populated TMainMenu.
+  Menu:=FMainMenu;
 
   FTop := TPanel.Create(Self);
   FTop.Parent := Self;
@@ -1051,7 +1052,15 @@ begin
   // Never replace the host application's menu in embedded mode.
   if FEmbeddedMode then Menu := nil
   else if FMainMenu<>nil then
+  begin
+    {$IFDEF DARWIN}
+    // Cocoa owns one global menu bar, including during our custom F11 mode.
+    // Removing the form's menu here also removes it from the macOS top bar.
+    Menu:=FMainMenu;
+    {$ELSE}
     if FFullScreenMode then Menu:=nil else Menu:=FMainMenu;
+    {$ENDIF}
+  end;
 end;
 
 procedure TKvmViewForm.GetOrderedLocalMonitors(out Indices: TKvmIntegerArray);

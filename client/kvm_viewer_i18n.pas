@@ -216,6 +216,16 @@ begin
   ExeDir:=ExtractFilePath(ExpandFileName(ParamStr(0)));
   OverrideDir:=Trim(GetEnvironmentVariable('LAZDESK_LANG_DIR'));
   if OverrideDir<>'' then FDirectory:=IncludeTrailingPathDelimiter(OverrideDir)
+  {$IFDEF DARWIN}
+  // In an .app the executable lives in Contents/MacOS, whereas translations
+  // belong in Contents/Resources/languages. Keep loose-binary compatibility.
+  else if DirectoryExists(ExpandFileName(ExeDir+'../Resources/languages')) then
+    FDirectory:=IncludeTrailingPathDelimiter(ExpandFileName(ExeDir+'../Resources/languages'))
+  // Lazarus IDE may create a bundle containing a symlink to the project
+  // executable without copying resources. Use the project catalogs there.
+  else if DirectoryExists(ExpandFileName(ExeDir+'../../../languages')) then
+    FDirectory:=IncludeTrailingPathDelimiter(ExpandFileName(ExeDir+'../../../languages'))
+  {$ENDIF}
   else FDirectory:=IncludeTrailingPathDelimiter(ExeDir)+'languages'+PathDelim;
   // A second embedded viewer must inherit the current process-wide language,
   // not silently reset the first viewer to the user's saved preference.

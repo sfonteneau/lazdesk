@@ -367,7 +367,9 @@ def make_projects(target: str, search: list[str], os_name: str,
         modes.clear()
         ET.SubElement(modes, 'Item', Name='Standalone', Default='True')
         native = '../native/static/' + target
-        set_value('ProjectOptions/General/UseAppBundle', 'False')
+        set_value('ProjectOptions/General/UseAppBundle', 'True' if role == 'client' and os_name == 'darwin' else 'False')
+        if role == 'client' and os_name == 'darwin':
+            set_value('ProjectOptions/General/NSPrincipalClass', 'TCocoaApplication')
         set_value('CompilerOptions/SearchPaths/IncludeFiles', '../shared;' + native)
         set_value('CompilerOptions/SearchPaths/Libraries', ';'.join([native, *search]))
         set_value('CompilerOptions/SearchPaths/UnitOutputDirectory', 'lib/standalone/' + target)
@@ -775,6 +777,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.only in ['both','client']:
         # Lazarus gettext .po (editable) / .mo (optional) catalogs.
         shutil.copytree(ROOT/'client/languages',output/'languages',dirs_exist_ok=True)
+        if os_name == 'darwin':
+            # The bare executable is kept for auditing/debugging. Finder must
+            # launch the bundled Cocoa app so native macOS menus are available.
+            run([sys.executable, ROOT/'build/package_macos_app.py',
+                 '--executable', output/'LazDeskClient',
+                 '--output', output/'LazDeskClient.app',
+                 '--languages', ROOT/'client/languages'])
     manifest['complete_applications_built']=True
     manifest['built_roles']=args.only
     write(stage/'build-manifest.json',json.dumps(manifest,indent=2)+'\n')
