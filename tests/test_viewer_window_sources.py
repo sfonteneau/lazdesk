@@ -13,7 +13,7 @@ def test_window_unit_is_listed_in_runtime_package():
     tree = ElementTree.parse(pkg)
     assert tree.getroot().tag == 'CONFIG'
     content = pkg.read_text()
-    assert '<Files Count="3">' in content
+    assert '<Files Count="4">' in content
     assert '../client/kvm_viewer_window.pas' in content
     assert 'mormot2' in content and 'LCL' in content
 

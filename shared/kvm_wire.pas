@@ -34,6 +34,7 @@ const
   //   R                                          refresh requested by viewer
   //   M + action:u8 + button:u8 + x:u16 + y:u16  mouse
   //   K + pressed:u8 + VK:u16                    LCL/Win32 virtual key
+  //   Q                                          Windows secure attention (SAS) request
   //   W + wheel-notches:i16                      wheel
   //   C + visible:u8 + normalized-x:u16 + normalized-y:u16   remote pointer position
   //   H + revision:u32 + w:u16 + h:u16 + hot-x:u16 + hot-y:u16

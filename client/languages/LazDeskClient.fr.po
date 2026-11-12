@@ -1,0 +1,545 @@
+# LazDesk Viewer translations (fr). Edited with Poedit or Lazarus.
+# Keys are Lazarus/FPC resourcestring identifiers; preserve Format %%s/%%d values.
+msgid ""
+msgstr ""
+"Project-Id-Version: LazDesk Viewer\n"
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: LazDesk migration to Lazarus gettext\n"
+
+#. Viewer: menu.file
+#: kvm_viewer_i18n.rsviewermenufile
+msgid "File"
+msgstr "Fichier"
+
+#. Viewer: menu.connection_settings
+#: kvm_viewer_i18n.rsviewermenuconnectionsettings
+msgid "Connection settings..."
+msgstr "Paramètres de connexion..."
+
+#. Viewer: menu.connect
+#: kvm_viewer_i18n.rsviewermenuconnect
+msgid "Connect"
+msgstr "Se connecter"
+
+#. Viewer: menu.disconnect
+#: kvm_viewer_i18n.rsviewermenudisconnect
+msgid "Disconnect"
+msgstr "Se déconnecter"
+
+#. Viewer: menu.quit
+#: kvm_viewer_i18n.rsviewermenuquit
+msgid "Exit"
+msgstr "Quitter"
+
+#. Viewer: menu.language
+#: kvm_viewer_i18n.rsviewermenulanguage
+msgid "Language"
+msgstr "Langue"
+
+#. Viewer: menu.language_en
+#: kvm_viewer_i18n.rsviewermenulanguageen
+msgid "English"
+msgstr "English"
+
+#. Viewer: menu.language_fr
+#: kvm_viewer_i18n.rsviewermenulanguagefr
+msgid "Français"
+msgstr "Français"
+
+#. Viewer: menu.view
+#: kvm_viewer_i18n.rsviewermenuview
+msgid "View"
+msgstr "Affichage"
+
+#. Viewer: menu.monitors
+#: kvm_viewer_i18n.rsviewermenumonitors
+msgid "Monitors"
+msgstr "Écrans"
+
+#. Viewer: menu.refresh
+#: kvm_viewer_i18n.rsviewermenurefresh
+msgid "Refresh"
+msgstr "Actualiser"
+
+#. Viewer: menu.fullscreen
+#: kvm_viewer_i18n.rsviewermenufullscreen
+msgid "Full screen"
+msgstr "Plein écran"
+
+#. Viewer: menu.control
+#: kvm_viewer_i18n.rsviewermenucontrol
+msgid "Control"
+msgstr "Contrôle"
+
+#. Viewer: menu.take_control
+#: kvm_viewer_i18n.rsviewermenutakecontrol
+msgid "Take control"
+msgstr "Prendre le contrôle"
+
+#. Viewer: menu.keyboard_mode
+#: kvm_viewer_i18n.rsviewermenukeyboardmode
+msgid "Keyboard mode"
+msgstr "Mode clavier"
+
+#. Viewer: menu.keyboard_unicode
+#: kvm_viewer_i18n.rsviewermenukeyboardunicode
+msgid "Automatic: Unicode text + shortcuts"
+msgstr "Automatique : texte Unicode + raccourcis"
+
+#. Viewer: menu.keyboard_physical
+#: kvm_viewer_i18n.rsviewermenukeyboardphysical
+msgid "Physical keys: remote layout"
+msgstr "Touches physiques : disposition distante"
+
+#. Viewer: menu.text
+#: kvm_viewer_i18n.rsviewermenutext
+msgid "Type / paste Unicode text..."
+msgstr "Saisir / coller du texte Unicode..."
+
+#. Viewer: menu.special_keys
+#: kvm_viewer_i18n.rsviewermenuspecialkeys
+msgid "Send special keys"
+msgstr "Envoyer des touches spéciales"
+
+#. Viewer: menu.clipboard
+#: kvm_viewer_i18n.rsviewermenuclipboard
+msgid "Clipboard"
+msgstr "Presse-papiers"
+
+#. Viewer: menu.clipboard_to
+#: kvm_viewer_i18n.rsviewermenuclipboardto
+msgid "My clipboard -> remote"
+msgstr "Mon presse-papiers -> distant"
+
+#. Viewer: menu.clipboard_from
+#: kvm_viewer_i18n.rsviewermenuclipboardfrom
+msgid "Remote -> my clipboard"
+msgstr "Distant -> mon presse-papiers"
+
+#. Viewer: special.sas
+#: kvm_viewer_i18n.rsviewerspecialsas
+msgid "Ctrl+Alt+Del (Windows)"
+msgstr "Ctrl+Alt+Suppr (Windows)"
+
+#. Viewer: special.f11
+#: kvm_viewer_i18n.rsviewerspecialf11
+msgid "F11 (remote)"
+msgstr "F11 (distant)"
+
+#. Viewer: special.start
+#: kvm_viewer_i18n.rsviewerspecialstart
+msgid "Windows key (Start)"
+msgstr "Touche Windows (Démarrer)"
+
+#. Viewer: special.ctrl_esc
+#: kvm_viewer_i18n.rsviewerspecialctrlesc
+msgid "Ctrl+Esc (Start)"
+msgstr "Ctrl+Échap (Démarrer)"
+
+#. Viewer: special.alt_tab
+#: kvm_viewer_i18n.rsviewerspecialalttab
+msgid "Alt+Tab (switch window)"
+msgstr "Alt+Tab (changer de fenêtre)"
+
+#. Viewer: special.task_manager
+#: kvm_viewer_i18n.rsviewerspecialtaskmanager
+msgid "Ctrl+Shift+Esc (Task Manager)"
+msgstr "Ctrl+Maj+Échap (Gestionnaire des tâches)"
+
+#. Viewer: special.run
+#: kvm_viewer_i18n.rsviewerspecialrun
+msgid "Win+R (Run)"
+msgstr "Win+R (Exécuter)"
+
+#. Viewer: special.explorer
+#: kvm_viewer_i18n.rsviewerspecialexplorer
+msgid "Win+E (Explorer)"
+msgstr "Win+E (Explorateur)"
+
+#. Viewer: special.desktop
+#: kvm_viewer_i18n.rsviewerspecialdesktop
+msgid "Win+D (desktop)"
+msgstr "Win+D (Bureau)"
+
+#. Viewer: special.lock
+#: kvm_viewer_i18n.rsviewerspeciallock
+msgid "Win+L (lock remote session)"
+msgstr "Win+L (verrouiller la session distante)"
+
+#. Viewer: special.alt_f4
+#: kvm_viewer_i18n.rsviewerspecialaltf4
+msgid "Alt+F4 (close window)"
+msgstr "Alt+F4 (fermer la fenêtre)"
+
+#. Viewer: label.host
+#: kvm_viewer_i18n.rsviewerlabelhost
+msgid "Host / IP"
+msgstr "Hôte / IP"
+
+#. Viewer: label.port
+#: kvm_viewer_i18n.rsviewerlabelport
+msgid "Port"
+msgstr "Port"
+
+#. Viewer: label.token
+#: kvm_viewer_i18n.rsviewerlabeltoken
+msgid "Connection token"
+msgstr "Jeton de connexion"
+
+#. Viewer: label.tls
+#: kvm_viewer_i18n.rsviewerlabeltls
+msgid "WSS / TLS"
+msgstr "WSS / TLS"
+
+#. Viewer: label.text_ime
+#: kvm_viewer_i18n.rsviewerlabeltextime
+msgid "Text / IME"
+msgstr "Texte / méthode de saisie"
+
+#. Viewer: label.keyboard_physical
+#: kvm_viewer_i18n.rsviewerlabelkeyboardphysical
+msgid "Physical key mode (otherwise automatic Unicode)"
+msgstr "Mode touches physiques (sinon Unicode automatique)"
+
+#. Viewer: label.clipboard_help
+#: kvm_viewer_i18n.rsviewerlabelclipboardhelp
+msgid "Clipboard: Unicode text only. Both directions are independent and reset for each connection."
+msgstr "Presse-papiers : texte Unicode uniquement. Les deux sens sont indépendants et réinitialisés à chaque connexion."
+
+#. Viewer: hint.clipboard_to
+#: kvm_viewer_i18n.rsviewerhintclipboardto
+msgid "Sync the current text and future copies (64 KiB max). Control required."
+msgstr "Synchroniser le texte actuel et les futures copies (64 Kio max). Contrôle requis."
+
+#. Viewer: hint.clipboard_from
+#: kvm_viewer_i18n.rsviewerhintclipboardfrom
+msgid "Allow the remote desktop to replace my text clipboard. Control required."
+msgstr "Autoriser le bureau distant à remplacer mon presse-papiers texte. Contrôle requis."
+
+#. Viewer: hint.log
+#: kvm_viewer_i18n.rsviewerhintlog
+msgid "Log"
+msgstr "Journal"
+
+#. Viewer: window.fullscreen
+#: kvm_viewer_i18n.rsviewerwindowfullscreen
+msgid "F11 full screen"
+msgstr "F11 plein écran"
+
+#. Viewer: monitor.none
+#: kvm_viewer_i18n.rsviewermonitornone
+msgid "No remote monitors"
+msgstr "Aucun écran distant"
+
+#. Viewer: monitor.all
+#: kvm_viewer_i18n.rsviewermonitorall
+msgid "All monitors"
+msgstr "Tous les écrans"
+
+#. Viewer: monitor.item
+#: kvm_viewer_i18n.rsviewermonitoritem
+msgid "Monitor %d  -  %dx%d"
+msgstr "Écran %d  -  %dx%d"
+
+#. Viewer: dialog.connection_settings
+#: kvm_viewer_i18n.rsviewerdialogconnectionsettings
+msgid "Connection settings"
+msgstr "Paramètres de connexion"
+
+#. Viewer: dialog.token
+#: kvm_viewer_i18n.rsviewerdialogtoken
+msgid "Token"
+msgstr "Jeton"
+
+#. Viewer: dialog.save
+#: kvm_viewer_i18n.rsviewerdialogsave
+msgid "Save"
+msgstr "Enregistrer"
+
+#. Viewer: dialog.cancel
+#: kvm_viewer_i18n.rsviewerdialogcancel
+msgid "Cancel"
+msgstr "Annuler"
+
+#. Viewer: dialog.lock_warning
+#: kvm_viewer_i18n.rsviewerdialoglockwarning
+msgid "Lock remote Windows session? You may lose remote control until someone unlocks it locally."
+msgstr "Verrouiller la session Windows distante ? Vous risquez de perdre le contrôle jusqu'à son déverrouillage local."
+
+#. Viewer: dialog.invalid_connection
+#: kvm_viewer_i18n.rsviewerdialoginvalidconnection
+msgid "Enter a host, a valid port, and an ASCII token without spaces (16..256 characters)."
+msgstr "Saisissez un hôte, un port valide et un jeton ASCII sans espace (16 à 256 caractères)."
+
+#. Viewer: dialog.text_title
+#: kvm_viewer_i18n.rsviewerdialogtexttitle
+msgid "Text input"
+msgstr "Saisie de texte"
+
+#. Viewer: dialog.text_message
+#: kvm_viewer_i18n.rsviewerdialogtextmessage
+msgid "Text entered using your input method (256 characters max)"
+msgstr "Texte saisi avec votre méthode de saisie (256 caractères maximum)"
+
+#. Viewer: status.initial
+#: kvm_viewer_i18n.rsviewerstatusinitial
+msgid "Disconnected | fit to window"
+msgstr "Déconnecté | adapté à la fenêtre"
+
+#. Viewer: status.language_changed
+#: kvm_viewer_i18n.rsviewerstatuslanguagechanged
+msgid "Viewer language: English"
+msgstr "Langue du Viewer : français"
+
+#. Viewer: status.monitor_required
+#: kvm_viewer_i18n.rsviewerstatusmonitorrequired
+msgid "At least one remote monitor must remain visible."
+msgstr "Au moins un écran distant doit rester visible."
+
+#. Viewer: status.clipboard_direction
+#: kvm_viewer_i18n.rsviewerstatusclipboarddirection
+msgid "Clipboard: local -> remote=%s; remote -> local=%s"
+msgstr "Presse-papiers : local -> distant=%s ; distant -> local=%s"
+
+#. Viewer: status.tls_required
+#: kvm_viewer_i18n.rsviewerstatustlsrequired
+msgid "TLS is required outside loopback. Use --allow-insecure only with a trusted tunnel/VPN."
+msgstr "TLS est obligatoire hors de la machine locale. Utilisez --allow-insecure uniquement via un tunnel ou VPN fiable."
+
+#. Viewer: status.connecting
+#: kvm_viewer_i18n.rsviewerstatusconnecting
+msgid "Connecting..."
+msgstr "Connexion en cours..."
+
+#. Viewer: status.ca_missing
+#: kvm_viewer_i18n.rsviewerstatuscamissing
+msgid "TLS CA file not found: %s"
+msgstr "Fichier CA TLS introuvable : %s"
+
+#. Viewer: status.invalid_ws
+#: kvm_viewer_i18n.rsviewerstatusinvalidws
+msgid "Invalid WebSocket address."
+msgstr "Adresse WebSocket invalide."
+
+#. Viewer: status.socket_open
+#: kvm_viewer_i18n.rsviewerstatussocketopen
+msgid "Socket open; authenticating..."
+msgstr "Socket ouvert ; authentification en cours..."
+
+#. Viewer: status.connect_failed
+#: kvm_viewer_i18n.rsviewerstatusconnectfailed
+msgid "Connection failed: %s"
+msgstr "Échec de connexion : %s"
+
+#. Viewer: status.disconnected
+#: kvm_viewer_i18n.rsviewerstatusdisconnected
+msgid "Disconnected"
+msgstr "Déconnecté"
+
+#. Viewer: status.control_request
+#: kvm_viewer_i18n.rsviewerstatuscontrolrequest
+msgid "Requesting exclusive control from server..."
+msgstr "Demande de contrôle exclusif au serveur..."
+
+#. Viewer: status.control_released
+#: kvm_viewer_i18n.rsviewerstatuscontrolreleased
+msgid "View only: control released."
+msgstr "Lecture seule : contrôle libéré."
+
+#. Viewer: status.control_revoked
+#: kvm_viewer_i18n.rsviewerstatuscontrolrevoked
+msgid "%s. Control revoked."
+msgstr "%s. Contrôle révoqué."
+
+#. Viewer: status.desktop_available
+#: kvm_viewer_i18n.rsviewerstatusdesktopavailable
+msgid "Desktop available. Request control again if needed."
+msgstr "Bureau disponible. Redemandez le contrôle si nécessaire."
+
+#. Viewer: status.text_rejected
+#: kvm_viewer_i18n.rsviewerstatustextrejected
+msgid "Text rejected: limit 256 Unicode code points / 1024 bytes, no control characters."
+msgstr "Texte refusé : limite de 256 points de code Unicode / 1 024 octets, aucun caractère de contrôle."
+
+#. Viewer: status.remote_desktop
+#: kvm_viewer_i18n.rsviewerstatusremotedesktop
+msgid "Remote desktop: %d x %d | video worker"
+msgstr "Bureau distant : %d x %d | traitement vidéo"
+
+#. Viewer: status.send_interrupted
+#: kvm_viewer_i18n.rsviewerstatussendinterrupted
+msgid "Network send interrupted: input will not be replayed."
+msgstr "Envoi réseau interrompu : les saisies ne seront pas retransmises."
+
+#. Viewer: status.connected_control
+#: kvm_viewer_i18n.rsviewerstatusconnectedcontrol
+msgid "Connected | control available."
+msgstr "Connecté | contrôle disponible."
+
+#. Viewer: status.connected_view
+#: kvm_viewer_i18n.rsviewerstatusconnectedview
+msgid "Connected | view only."
+msgstr "Connecté | lecture seule."
+
+#. Viewer: status.control_granted
+#: kvm_viewer_i18n.rsviewerstatuscontrolgranted
+msgid "EXCLUSIVE control granted: click inside the desktop."
+msgstr "Contrôle EXCLUSIF accordé : cliquez dans le bureau."
+
+#. Viewer: status.control_busy
+#: kvm_viewer_i18n.rsviewerstatuscontrolbusy
+msgid "Another client currently controls the desktop."
+msgstr "Un autre client contrôle actuellement le bureau."
+
+#. Viewer: status.sas_requested
+#: kvm_viewer_i18n.rsviewerstatussasrequested
+msgid "Ctrl+Alt+Del requested. Windows may block it (service/uiAccess and SAS policy required)."
+msgstr "Ctrl+Alt+Suppr demandé. Windows peut le bloquer (service/uiAccess et stratégie SAS nécessaires)."
+
+#. Viewer: status.sas_unavailable
+#: kvm_viewer_i18n.rsviewerstatussasunavailable
+msgid "Ctrl+Alt+Del unavailable: remote host is not Windows or lacks sas.dll."
+msgstr "Ctrl+Alt+Suppr indisponible : hôte non Windows ou sas.dll absent."
+
+#. Viewer: status.sas_denied
+#: kvm_viewer_i18n.rsviewerstatussasdenied
+msgid "Ctrl+Alt+Del denied: exclusive control or active desktop required."
+msgstr "Ctrl+Alt+Suppr refusé : contrôle exclusif ou bureau actif requis."
+
+#. Viewer: status.input_unsupported
+#: kvm_viewer_i18n.rsviewerstatusinputunsupported
+msgid "Input unsupported or rejected by the remote system. Text may be incomplete."
+msgstr "Saisie non prise en charge ou refusée par le système distant. Le texte peut être incomplet."
+
+#. Viewer: status.auth_denied
+#: kvm_viewer_i18n.rsviewerstatusauthdenied
+msgid "Authentication refused"
+msgstr "Authentification refusée"
+
+#. Viewer: status.client_limit
+#: kvm_viewer_i18n.rsviewerstatusclientlimit
+msgid "Maximum number of clients reached"
+msgstr "Nombre maximal de clients atteint"
+
+#. Viewer: status.timeout
+#: kvm_viewer_i18n.rsviewerstatustimeout
+msgid "Session ended: server reported a timeout"
+msgstr "Session terminée : le serveur signale un délai d'attente dépassé"
+
+#. Viewer: status.protocol_error
+#: kvm_viewer_i18n.rsviewerstatusprotocolerror
+msgid "Server reported a protocol error"
+msgstr "Le serveur signale une erreur de protocole"
+
+#. Viewer: status.local_receive
+#: kvm_viewer_i18n.rsviewerstatuslocalreceive
+msgid "LOCAL receive error: %s"
+msgstr "Erreur de réception LOCALE : %s"
+
+#. Viewer: status.socket_closed
+#: kvm_viewer_i18n.rsviewerstatussocketclosed
+msgid "WebSocket closed: %s (check origin)"
+msgstr "WebSocket fermé : %s (origine à vérifier)"
+
+#. Viewer: status.video_error
+#: kvm_viewer_i18n.rsviewerstatusvideoerror
+msgid "Video error: %s"
+msgstr "Erreur vidéo : %s"
+
+#. Viewer: status.invalid_session
+#: kvm_viewer_i18n.rsviewerstatusinvalidsession
+msgid "Invalid session state"
+msgstr "État de session invalide"
+
+#. Viewer: status.invalid_ack
+#: kvm_viewer_i18n.rsviewerstatusinvalidack
+msgid "Invalid input acknowledgment"
+msgstr "Accusé de réception de saisie invalide"
+
+#. Viewer: status.input_desync
+#: kvm_viewer_i18n.rsviewerstatusinputdesync
+msgid "Input sequence out of sync"
+msgstr "Séquence de saisie désynchronisée"
+
+#. Viewer: status.input_partial
+#: kvm_viewer_i18n.rsviewerstatusinputpartial
+msgid "Input rejected/partial (%d, %d code points)"
+msgstr "Saisie refusée/partielle (%d, %d points de code)"
+
+#. Viewer: status.display_failed
+#: kvm_viewer_i18n.rsviewerstatusdisplayfailed
+msgid "Display failed: %s"
+msgstr "Échec d'affichage : %s"
+
+#. Viewer: status.input_ack_missing
+#: kvm_viewer_i18n.rsviewerstatusinputackmissing
+msgid "Input acknowledgment missing: no retransmission"
+msgstr "Accusé de réception de saisie manquant : aucune retransmission"
+
+#. Viewer: status.input_blocked
+#: kvm_viewer_i18n.rsviewerstatusinputblocked
+msgid "Invalid local input blocked before sending."
+msgstr "Saisie locale invalide bloquée avant l'envoi."
+
+#. Viewer: status.input_queue_full
+#: kvm_viewer_i18n.rsviewerstatusinputqueuefull
+msgid "Input queue full: unsent events discarded, keys released."
+msgstr "File de saisie saturée : événements non envoyés écartés et touches relâchées."
+
+#. Viewer: status.keyboard_physical
+#: kvm_viewer_i18n.rsviewerstatuskeyboardphysical
+msgid "Physical keys: the remote desktop keyboard layout and input methods apply."
+msgstr "Touches physiques : la disposition du clavier et la méthode de saisie distantes s'appliquent."
+
+#. Viewer: status.keyboard_auto
+#: kvm_viewer_i18n.rsviewerstatuskeyboardauto
+msgid "Automatic mode: locally composed Unicode text; shortcuts and special keys sent separately."
+msgstr "Mode automatique : texte Unicode composé localement ; raccourcis et touches spéciales envoyés séparément."
+
+#. Viewer: view.waiting
+#: kvm_viewer_i18n.rsviewerviewwaiting
+msgid "Waiting for remote desktop..."
+msgstr "En attente du bureau distant..."
+
+#. Viewer: session.active
+#: kvm_viewer_i18n.rsviewersessionactive
+msgid "Session active"
+msgstr "Session active"
+
+#. Viewer: session.locked
+#: kvm_viewer_i18n.rsviewersessionlocked
+msgid "Session locked"
+msgstr "Session verrouillée"
+
+#. Viewer: session.inactive
+#: kvm_viewer_i18n.rsviewersessioninactive
+msgid "Session inactive/disconnected"
+msgstr "Session inactive/déconnectée"
+
+#. Viewer: session.changed
+#: kvm_viewer_i18n.rsviewersessionchanged
+msgid "Session changed: restart the server in the intended session"
+msgstr "Session modifiée : relancez le serveur dans la session souhaitée"
+
+#. Viewer: session.capture_lost
+#: kvm_viewer_i18n.rsviewersessioncapturelost
+msgid "Capture unavailable"
+msgstr "Capture indisponible"
+
+#. Viewer: session.unknown
+#: kvm_viewer_i18n.rsviewersessionunknown
+msgid "Unknown session state (sharing suspended)"
+msgstr "État de session inconnu (partage suspendu)"
+
+#. Viewer: dialog.arguments_title
+#: kvm_viewer_i18n.rsviewerdialogargumentstitle
+msgid "Invalid LazDesk parameters"
+msgstr "Paramètres LazDesk incorrects"
+
+#. Viewer: dialog.help_title
+#: kvm_viewer_i18n.rsviewerdialoghelptitle
+msgid "LazDeskClient - help"
+msgstr "LazDeskClient - aide"
+

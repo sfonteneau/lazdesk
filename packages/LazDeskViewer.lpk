@@ -11,7 +11,7 @@
       <Item1><PackageName Value="mormot2"/></Item1>
       <Item2><PackageName Value="LCL"/></Item2>
     </RequiredPkgs>
-    <Files Count="3">
+    <Files Count="4">
       <Item1>
         <Filename Value="../client/kvm_viewer_frame.pas"/>
         <UnitName Value="kvm_viewer_frame"/>
@@ -24,6 +24,10 @@
         <Filename Value="../client/kvm_viewer_window.pas"/>
         <UnitName Value="kvm_viewer_window"/>
       </Item3>
+      <Item4>
+        <Filename Value="../client/kvm_viewer_i18n.pas"/>
+        <UnitName Value="kvm_viewer_i18n"/>
+      </Item4>
     </Files>
   </Package>
   <CompilerOptions>

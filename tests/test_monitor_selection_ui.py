@@ -5,8 +5,8 @@ server = (ROOT/'server/kvm_server.pas').read_text(encoding='utf-8')
 monitors = (ROOT/'server/kvm_monitors.pas').read_text(encoding='utf-8')
 present = (ROOT/'client/kvm_present_win.pas').read_text(encoding='utf-8')
 assert "FMenuMonitors.Caption:='Monitors'" in form
-assert "Item.Caption:='All monitors'" in form
-assert "Item.Caption:=Format('Monitor %d  -  %dx%d'" in form
+assert "Item.Caption:=rsViewerMonitorAll" in form
+assert "Item.Caption:=Format(rsViewerMonitorItem" in form
 assert 'procedure TKvmViewForm.MonitorMenuClick' in form
 assert 'FRemoteMonitorSelected[Index]:=not FRemoteMonitorSelected[Index]' in form
 assert 'SelectedRemoteMonitorCount<=1' in form

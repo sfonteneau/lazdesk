@@ -772,6 +772,9 @@ def main(argv: list[str] | None = None) -> int:
         run([laz,*opts,project])
         if not exe.is_file(): raise BuildError('Executable not produced: '+str(exe))
         audit_binary(exe, cpu, os_name, objdump, output/(app+'-dependencies.txt'))
+    if args.only in ['both','client']:
+        # Lazarus gettext .po (editable) / .mo (optional) catalogs.
+        shutil.copytree(ROOT/'client/languages',output/'languages',dirs_exist_ok=True)
     manifest['complete_applications_built']=True
     manifest['built_roles']=args.only
     write(stage/'build-manifest.json',json.dumps(manifest,indent=2)+'\n')

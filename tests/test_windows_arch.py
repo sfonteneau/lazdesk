@@ -270,6 +270,8 @@ class Targets(unittest.TestCase):
             for role,app in [('server','LazDeskServer'),('client','LazDeskClient')]:
                 (root/role).mkdir()
                 shutil.copy2(ROOT/role/(app+'.lpi'), root/role)
+            # The standalone client now distributes editable language catalogs.
+            shutil.copytree(ROOT/'client/languages',root/'client/languages')
             sdk=root/'MinGW SDK'/'bin'
             for name in ['gcc','ar','nm','objdump','ld']:
                 dummy_tool(sdk/(name+'.exe'))

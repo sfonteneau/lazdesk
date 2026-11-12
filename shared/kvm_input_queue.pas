@@ -27,7 +27,8 @@ function TKvmInputQueue.Push(const Packet: RawByteString): Boolean;
 var N: Integer; Points: TKvmCodePoints;
 begin
   Result:=False;
-  if (Packet='') or not (Packet[1] in ['K','M','W','U']) then Exit;
+  if (Packet='') or not (Packet[1] in ['K','M','W','U','Q']) then Exit;
+  if (Packet[1]='Q') and (Length(Packet)<>1) then Exit;
   if (Packet[1]='U') and not ReadTextCommit(Packet,Points) then Exit;
   N:=Length(FItems);
   // Replace only the last *unsent* pure mouse move. Never cross a key,

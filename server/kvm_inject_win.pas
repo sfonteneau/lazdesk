@@ -13,6 +13,7 @@ procedure InjectMouse(Action, Button: Byte; NX, NY: Word);
 procedure InjectText(CodePoint: Cardinal);
 procedure InjectKey(Pressed: Boolean; VKey: Word);
 procedure InjectWheel(Notches: SmallInt);
+function RequestSecureAttention: Boolean;
 
 implementation
 
@@ -407,6 +408,38 @@ begin
   if not Pressed then TI.ki.dwFlags := TI.ki.dwFlags or KEYEVENTF_KEYUP;
   if KvmSendInput(1, @TI, SizeOf(TI)) <> 1 then
     raise Exception.Create('SendInput rejected (Windows session or permissions).');
+end;
+
+function RequestSecureAttention: Boolean;
+type
+  TSendSAS = procedure(AsUser: LongBool); stdcall;
+var
+  SasLib: HMODULE;
+  SendSASProc: TSendSAS;
+  SystemDirectory: array[0..259] of WideChar;
+  DirLength: UINT;
+  SasPath: WideString;
+begin
+  // SendInput(Ctrl, Alt, Del) is *not* a secure attention sequence.
+  // Import dynamically so a missing sas.dll does not prevent server start.
+  // Load from Windows' own system directory to avoid DLL search-path hijacking.
+  // SendSAS returns void: successful invocation does NOT imply Windows
+  // accepted the SAS. Windows requires a service or signed uiAccess binary
+  // and a suitable local/group policy (SoftwareSASGeneration).
+  Result:=False;
+  DirLength:=Windows.GetSystemDirectoryW(@SystemDirectory[0],Length(SystemDirectory));
+  if (DirLength=0) or (DirLength>=Length(SystemDirectory)) then Exit;
+  SasPath:=WideString(PWideChar(@SystemDirectory[0]))+'\sas.dll';
+  SasLib:=Windows.LoadLibraryW(PWideChar(SasPath));
+  if SasLib=0 then Exit;
+  try
+    Pointer(SendSASProc):=Windows.GetProcAddress(SasLib,PChar('SendSAS'));
+    if not Assigned(SendSASProc) then Exit;
+    SendSASProc(True);
+    Result:=True;
+  finally
+    Windows.FreeLibrary(SasLib);
+  end;
 end;
 
 procedure InjectWheel(Notches: SmallInt);

@@ -146,6 +146,7 @@ type
     function RejectText(ID: THttpServerConnectionID; Serial: Cardinal;
       const Packet: RawByteString): RawByteString;
     procedure HandleKey(ID: THttpServerConnectionID; Pressed: Boolean; VKey: Word);
+    procedure HandleSecureAttention(ID: THttpServerConnectionID);
     procedure HandleWheel(ID: THttpServerConnectionID; Notches: SmallInt);
     procedure HandleFrame(Sender: TWebSocketProcess; const Frame: TWebSocketFrame);
     procedure SendText(ID: THttpServerConnectionID; const Msg: RawByteString);
@@ -1221,6 +1222,29 @@ begin
   end;
 end;
 
+procedure TKvmServer.HandleSecureAttention(ID: THttpServerConnectionID);
+var
+  I: Integer;
+  Status: RawByteString;
+begin
+  Status:='SAS DENIED';
+  EnterCriticalSection(FLock);
+  try
+    I:=FindClientLocked(ID);
+    // A view-only client or one without the exclusive control lease must
+    // never be allowed to trigger the remote secure-attention sequence.
+    if (I>=0) and FClients[I].CanControl and (FController=ID) and
+       FDesktopAvailable and DesktopSessionAvailable then
+    begin
+      if RequestDesktopSecureAttention then Status:='SAS REQUESTED'
+      else Status:='SAS UNAVAILABLE';
+    end;
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+  SendText(ID,Status);
+end;
+
 function TKvmServer.RejectText(ID: THttpServerConnectionID; Serial: Cardinal;
   const Packet: RawByteString): RawByteString;
 var I: Integer;
@@ -1516,7 +1540,7 @@ begin
       end;
       Valid:=False;
       case Frame.payload[1] of
-        'P','R','G','L','Z': Valid:=Length(Frame.payload)=1;
+        'P','R','G','L','Z','Q': Valid:=Length(Frame.payload)=1;
         'A': Valid:=ReadBatchAck(Frame.payload,Serial);
         'N': Valid:=ReadBatchNack(Frame.payload,Serial);
         'M': Valid:=ReadMouse(Frame.payload,Action,Button,X,Y);
@@ -1574,6 +1598,7 @@ begin
           'Z': RelinquishControl(ID,True);
           'M': HandleMouse(ID,Action,Button,X,Y);
           'K': HandleKey(ID,Pressed,VKey);
+          'Q': HandleSecureAttention(ID);
           'W': HandleWheel(ID,Wheel);
           'X':
           begin

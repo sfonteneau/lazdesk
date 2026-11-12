@@ -12,7 +12,8 @@ uses
   kvm_wire, kvm_cli, kvm_jpeg_guard, kvm_extwire, kvm_codec, kvm_frame,
   kvm_rgb_bitmap, kvm_input_queue, kvm_security, kvm_tls_policy,
   kvm_video_worker, kvm_surface, kvm_client_log,
-  kvm_clipboard_wire, kvm_clipboard_native, kvm_clipboard_client_worker
+  kvm_clipboard_wire, kvm_clipboard_native, kvm_clipboard_client_worker,
+  kvm_viewer_i18n
   {$IFDEF WINDOWS}, kvm_present_win{$ENDIF};
 
 type
@@ -40,8 +41,12 @@ type
     FMenuConnectionSettings, FMenuConnect, FMenuDisconnect, FMenuQuit: TMenuItem;
     FMenuMonitors, FMenuFullscreen, FMenuRefresh: TMenuItem;
     FMenuControl, FMenuKeyboardMode, FMenuUnicodeKeys, FMenuRemoteKeys, FMenuText: TMenuItem;
+    FMenuSpecialKeys: TMenuItem;
+    FMenuLanguage, FMenuLanguageEN, FMenuLanguageFR: TMenuItem;
+    FTranslations: TKvmViewerI18n;
     FMenuClipboard, FMenuClipToRemote, FMenuClipFromRemote: TMenuItem;
     FHost, FPort, FToken: TEdit;
+    FLabelHost, FLabelPort, FLabelToken, FLabelClipboardHelp: TLabel;
     FConnect, FDisconnect, FRefresh, FText: TButton;
     FControl, FRemoteKeys: TCheckBox;
     FClipToRemote, FClipFromRemote: TCheckBox;
@@ -103,6 +108,10 @@ type
     procedure ConnectionSettingsClick(Sender: TObject);
     procedure ControlMenuClick(Sender: TObject);
     procedure KeyboardMenuClick(Sender: TObject);
+    procedure SpecialKeyClick(Sender: TObject);
+    procedure LanguageMenuClick(Sender: TObject);
+    procedure ApplyTranslations;
+    function SessionStateDescription(Reason: Byte): string;
     procedure ClipboardMenuClick(Sender: TObject);
     procedure MonitorMenuClick(Sender: TObject);
     procedure FullScreenMenuClick(Sender: TObject);
@@ -181,6 +190,8 @@ type
     function Authenticated: Boolean;
     function ControlGranted: Boolean;
     function StatusText: string;
+    function ViewerLanguage: string;
+    procedure SetViewerLanguage(const Code: string);
     property OnStatusChange: TNotifyEvent read FOnStatusChange write FOnStatusChange;
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -193,6 +204,18 @@ const
   KVM_MOUSE_INTERVAL_MS = 12;
   KVM_MOUSE_ECHO_WINDOW_MS = 800;
   KVM_MOUSE_ECHO_TOLERANCE = 64;
+  // IDs are assigned to the native Control -> Send special keys menu items.
+  KVM_SPECIAL_SAS = 1;
+  KVM_SPECIAL_F11 = 2;
+  KVM_SPECIAL_START = 3;
+  KVM_SPECIAL_CTRL_ESC = 4;
+  KVM_SPECIAL_ALT_TAB = 5;
+  KVM_SPECIAL_TASK_MANAGER = 6;
+  KVM_SPECIAL_RUN = 7;
+  KVM_SPECIAL_EXPLORER = 8;
+  KVM_SPECIAL_DESKTOP = 9;
+  KVM_SPECIAL_LOCK = 10;
+  KVM_SPECIAL_ALT_F4 = 11;
   {$IFDEF WINDOWS}
   // Local pointer mirrors the exact native cursor shape selected by the remote app.
   KVM_LOCAL_NATIVE_CURSOR: TCursor = 1001;
@@ -228,9 +251,20 @@ constructor TKvmViewForm.Create(AOwner: TComponent);
 var
   L: TLabel;
   Sep: TMenuItem;
+
+  procedure AddSpecialKeyItem(const Title: string; Shortcut: PtrInt);
+  var Item: TMenuItem;
+  begin
+    Item:=TMenuItem.Create(FMainMenu);
+    Item.Caption:=Title;
+    Item.Tag:=Shortcut;
+    Item.OnClick:=@SpecialKeyClick;
+    FMenuSpecialKeys.Add(Item);
+  end;
 begin
   inherited CreateNew(AOwner, 1);
   InitCriticalSection(FLock);
+  FTranslations:=TKvmViewerI18n.Create;
   Caption := 'LazDesk v9 | F11: Full screen';
   Width := 1080;
   Height := 730;
@@ -295,6 +329,17 @@ begin
   FMenuDisconnect.Caption:='Disconnect'; FMenuDisconnect.Enabled:=False;
   FMenuDisconnect.OnClick:=@DisconnectClick; FFileMenu.Add(FMenuDisconnect);
   Sep:=TMenuItem.Create(FMainMenu); Sep.Caption:='-'; FFileMenu.Add(Sep);
+  FMenuLanguage:=TMenuItem.Create(FMainMenu);
+  FMenuLanguage.Caption:='Language'; FFileMenu.Add(FMenuLanguage);
+  FMenuLanguageEN:=TMenuItem.Create(FMainMenu);
+  FMenuLanguageEN.Caption:='English'; FMenuLanguageEN.RadioItem:=True;
+  FMenuLanguageEN.GroupIndex:=42; FMenuLanguageEN.OnClick:=@LanguageMenuClick;
+  FMenuLanguage.Add(FMenuLanguageEN);
+  FMenuLanguageFR:=TMenuItem.Create(FMainMenu);
+  FMenuLanguageFR.Caption:='Français'; FMenuLanguageFR.RadioItem:=True;
+  FMenuLanguageFR.GroupIndex:=42; FMenuLanguageFR.OnClick:=@LanguageMenuClick;
+  FMenuLanguage.Add(FMenuLanguageFR);
+  Sep:=TMenuItem.Create(FMainMenu); Sep.Caption:='-'; FFileMenu.Add(Sep);
   FMenuQuit:=TMenuItem.Create(FMainMenu);
   FMenuQuit.Caption:='Exit'; FMenuQuit.OnClick:=@QuitClick; FFileMenu.Add(FMenuQuit);
 
@@ -329,6 +374,23 @@ begin
   FMenuText:=TMenuItem.Create(FMainMenu);
   FMenuText.Caption:='Type / paste Unicode text...'; FMenuText.Enabled:=False;
   FMenuText.OnClick:=@TextClick; FControlMenu.Add(FMenuText);
+  FMenuSpecialKeys:=TMenuItem.Create(FMainMenu);
+  FMenuSpecialKeys.Caption:='Send special keys';
+  FMenuSpecialKeys.Enabled:=False;
+  FControlMenu.Add(FMenuSpecialKeys);
+  AddSpecialKeyItem('Ctrl+Alt+Del (Windows)',KVM_SPECIAL_SAS);
+  Sep:=TMenuItem.Create(FMainMenu); Sep.Caption:='-'; FMenuSpecialKeys.Add(Sep);
+  AddSpecialKeyItem('F11 (remote)',KVM_SPECIAL_F11);
+  AddSpecialKeyItem('Windows key (Start)',KVM_SPECIAL_START);
+  AddSpecialKeyItem('Ctrl+Esc (Start)',KVM_SPECIAL_CTRL_ESC);
+  Sep:=TMenuItem.Create(FMainMenu); Sep.Caption:='-'; FMenuSpecialKeys.Add(Sep);
+  AddSpecialKeyItem('Alt+Tab (switch window)',KVM_SPECIAL_ALT_TAB);
+  AddSpecialKeyItem('Ctrl+Shift+Esc (Task Manager)',KVM_SPECIAL_TASK_MANAGER);
+  AddSpecialKeyItem('Win+R (Run)',KVM_SPECIAL_RUN);
+  AddSpecialKeyItem('Win+E (Explorer)',KVM_SPECIAL_EXPLORER);
+  AddSpecialKeyItem('Win+D (desktop)',KVM_SPECIAL_DESKTOP);
+  AddSpecialKeyItem('Win+L (lock remote session)',KVM_SPECIAL_LOCK);
+  AddSpecialKeyItem('Alt+F4 (close window)',KVM_SPECIAL_ALT_F4);
   Sep:=TMenuItem.Create(FMainMenu); Sep.Caption:='-'; FControlMenu.Add(Sep);
   FMenuClipboard:=TMenuItem.Create(FMainMenu);
   FMenuClipboard.Caption:='Clipboard'; FControlMenu.Add(FMenuClipboard);
@@ -353,7 +415,7 @@ begin
   L := TLabel.Create(Self);
   L.Parent := FTop;
   L.SetBounds(12, 6, 95, 17);
-  L.Caption := 'Host / IP';
+  L.Caption := 'Host / IP'; FLabelHost:=L;
 
   FHost := TEdit.Create(Self);
   FHost.Parent := FTop;
@@ -363,7 +425,7 @@ begin
   L := TLabel.Create(Self);
   L.Parent := FTop;
   L.SetBounds(194, 6, 70, 17);
-  L.Caption := 'Port';
+  L.Caption := 'Port'; FLabelPort:=L;
 
   FPort := TEdit.Create(Self);
   FPort.Parent := FTop;
@@ -373,7 +435,7 @@ begin
   L := TLabel.Create(Self);
   L.Parent := FTop;
   L.SetBounds(271, 6, 140, 17);
-  L.Caption := 'Connection token';
+  L.Caption := 'Connection token'; FLabelToken:=L;
 
   FToken := TEdit.Create(Self);
   FToken.Parent := FTop;
@@ -441,6 +503,7 @@ begin
   FClipFromRemote.ShowHint:=True;
   L:=TLabel.Create(Self); L.Parent:=FTop; L.SetBounds(12,156,980,20);
   L.Caption:='Clipboard: Unicode text only. Both directions are independent and reset for each connection.';
+  FLabelClipboardHelp:=L;
 
 
   FView := TPaintBox.Create(Self);
@@ -453,6 +516,8 @@ begin
   FView.OnMouseUp := @ViewMouseUp;
   FView.OnMouseWheel := @ViewMouseWheel;
 
+  ApplyTranslations;
+  SetStatus(rsViewerStatusInitial);
   SyncMainMenu;
   ResetLocalInputs;
 
@@ -529,6 +594,32 @@ begin
   Result := FStatus.Caption;
 end;
 
+function TKvmViewForm.ViewerLanguage: string;
+begin
+  Result:=FTranslations.Language;
+end;
+
+procedure TKvmViewForm.SetViewerLanguage(const Code: string);
+var
+  I: Integer;
+  OtherViewer: TKvmViewForm;
+begin
+  // Lazarus resourcestrings are process-wide. Refresh every open LazDesk
+  // viewer after switching so embedded viewers do not retain stale captions.
+  FTranslations.SetLanguage(Code);
+  ApplyTranslations;
+  SyncMainMenu;
+  for I:=0 to Screen.CustomFormCount-1 do
+    if Screen.CustomForms[I] is TKvmViewForm then
+    begin
+      OtherViewer:=TKvmViewForm(Screen.CustomForms[I]);
+      if OtherViewer=Self then Continue;
+      OtherViewer.ApplyTranslations;
+      OtherViewer.SyncMainMenu;
+    end;
+  SetStatus(rsViewerStatusLanguageChanged);
+end;
+
 procedure TKvmViewForm.ApplyOptions(const Options: TKvmClientOptions);
 begin
   FHost.Text := Options.Host;
@@ -554,7 +645,7 @@ begin
   if FView<>nil then CloseSocket
   else begin StopClipboardWorker; StopVideoWorker; FreeAndNil(FSocket); end;
   {$IFDEF WINDOWS}FWinPresenter.Free;{$ENDIF}
-  FBitmap.Free; FInputs.Free;
+  FBitmap.Free; FInputs.Free; FTranslations.Free;
   DoneCriticalSection(FLock);
   inherited Destroy;
 end;
@@ -564,9 +655,10 @@ begin
   // Status remains readable in the title even when the menu is hidden in full screen.
   if FStatus.Caption <> TextA then
     KvmClientLog('[client-status] ' + TextA);
-  Caption := 'LazDesk | ' + Copy(TextA, 1, 80) + ' | F11 full screen';
+  Caption := 'LazDesk | ' + Copy(TextA, 1, 80) + ' | ' +
+    rsViewerWindowFullscreen;
   FStatus.Caption := TextA;
-  FStatus.Hint := TextA + LineEnding + 'Journal : ' + KvmClientLogPath;
+  FStatus.Hint := TextA + LineEnding + rsViewerHintLog + ': ' + KvmClientLogPath;
   FStatus.ShowHint := True;
   if Assigned(FOnStatusChange) then FOnStatusChange(Self);
 end;
@@ -647,13 +739,13 @@ begin
   if Length(FRemoteMonitors)=0 then
   begin
     Item:=TMenuItem.Create(FMainMenu);
-    Item.Caption:='No remote monitors'; Item.Enabled:=False;
+    Item.Caption:=rsViewerMonitorNone; Item.Enabled:=False;
     FMenuMonitors.Add(Item);
     FMenuMonitors.Enabled:=False;
     Exit;
   end;
   Item:=TMenuItem.Create(FMainMenu);
-  Item.Caption:='All monitors'; Item.Tag:=-1;
+  Item.Caption:=rsViewerMonitorAll; Item.Tag:=-1;
   Item.OnClick:=@MonitorMenuClick; FMenuMonitors.Add(Item);
   if Length(FRemoteMonitors)>1 then
   begin
@@ -663,7 +755,8 @@ begin
   for I:=0 to High(FRemoteMonitors) do
   begin
     Item:=TMenuItem.Create(FMainMenu);
-    Item.Caption:=Format('Monitor %d  -  %dx%d',[I+1,FRemoteMonitors[I].W,FRemoteMonitors[I].H]);
+    Item.Caption:=Format(rsViewerMonitorItem,
+      [I+1,FRemoteMonitors[I].W,FRemoteMonitors[I].H]);
     Item.Tag:=I; Item.OnClick:=@MonitorMenuClick;
     FMenuMonitors.Add(Item);
   end;
@@ -703,7 +796,7 @@ begin
   begin
     if FRemoteMonitorSelected[Index] and (SelectedRemoteMonitorCount<=1) then
     begin
-      SetStatus('At least one remote monitor must remain visible.');
+      SetStatus(rsViewerStatusMonitorRequired);
       SyncMonitorMenu;
       Exit;
     end;
@@ -738,21 +831,21 @@ begin
   if FSocket<>nil then Exit;
   Dlg:=TForm.CreateNew(Self,1);
   try
-    Dlg.Caption:='Connection settings';
+    Dlg.Caption:=rsViewerDialogConnectionSettings;
     Dlg.Width:=470; Dlg.Height:=270; Dlg.Position:=poOwnerFormCenter;
     Dlg.BorderStyle:=bsDialog;
-    L:=TLabel.Create(Dlg); L.Parent:=Dlg; L.SetBounds(16,18,100,18); L.Caption:='Host / IP';
+    L:=TLabel.Create(Dlg); L.Parent:=Dlg; L.SetBounds(16,18,100,18); L.Caption:=rsViewerLabelHost;
     HostEdit:=TEdit.Create(Dlg); HostEdit.Parent:=Dlg; HostEdit.SetBounds(145,14,290,26); HostEdit.Text:=FHost.Text;
-    L:=TLabel.Create(Dlg); L.Parent:=Dlg; L.SetBounds(16,58,100,18); L.Caption:='Port';
+    L:=TLabel.Create(Dlg); L.Parent:=Dlg; L.SetBounds(16,58,100,18); L.Caption:=rsViewerLabelPort;
     PortEdit:=TEdit.Create(Dlg); PortEdit.Parent:=Dlg; PortEdit.SetBounds(145,54,100,26); PortEdit.Text:=FPort.Text;
-    L:=TLabel.Create(Dlg); L.Parent:=Dlg; L.SetBounds(16,98,120,18); L.Caption:='Token';
+    L:=TLabel.Create(Dlg); L.Parent:=Dlg; L.SetBounds(16,98,120,18); L.Caption:=rsViewerDialogToken;
     TokenEdit:=TEdit.Create(Dlg); TokenEdit.Parent:=Dlg; TokenEdit.SetBounds(145,94,290,26);
     TokenEdit.Text:=FToken.Text; TokenEdit.PasswordChar:='*';
     TlsCheck:=TCheckBox.Create(Dlg); TlsCheck.Parent:=Dlg; TlsCheck.SetBounds(145,134,180,24);
-    TlsCheck.Caption:='WSS / TLS'; TlsCheck.Checked:=FTls.Checked;
-    OkBtn:=TButton.Create(Dlg); OkBtn.Parent:=Dlg; OkBtn.Caption:='Save'; OkBtn.ModalResult:=mrOk;
+    TlsCheck.Caption:=rsViewerLabelTls; TlsCheck.Checked:=FTls.Checked;
+    OkBtn:=TButton.Create(Dlg); OkBtn.Parent:=Dlg; OkBtn.Caption:=rsViewerDialogSave; OkBtn.ModalResult:=mrOk;
     OkBtn.SetBounds(235,188,96,30);
-    CancelBtn:=TButton.Create(Dlg); CancelBtn.Parent:=Dlg; CancelBtn.Caption:='Cancel'; CancelBtn.ModalResult:=mrCancel;
+    CancelBtn:=TButton.Create(Dlg); CancelBtn.Parent:=Dlg; CancelBtn.Caption:=rsViewerDialogCancel; CancelBtn.ModalResult:=mrCancel;
     CancelBtn.SetBounds(339,188,96,30);
     if Dlg.ShowModal<>mrOk then Exit;
     FHost.Text:=Trim(HostEdit.Text); FPort.Text:=Trim(PortEdit.Text);
@@ -780,6 +873,51 @@ begin
   SyncMainMenu;
 end;
 
+procedure TKvmViewForm.SpecialKeyClick(Sender: TObject);
+var
+  Shortcut, Count, I: Integer;
+  Keys: array[0..2] of Word;
+begin
+  // Menu clicks do not require the remote paint box to have keyboard focus.
+  // They DO require the same exclusive-control permission as normal typing.
+  if not (Sender is TMenuItem) or not ControlAllowed then Exit;
+  Shortcut:=TMenuItem(Sender).Tag;
+  if Shortcut=KVM_SPECIAL_SAS then
+  begin
+    // Ctrl+Alt+Del is a Windows secure attention sequence. Plain SendInput
+    // keys cannot produce it; ask the server to use the native SAS API.
+    SendPacket('Q');
+    Exit;
+  end;
+
+  Count:=0;
+  case Shortcut of
+    KVM_SPECIAL_F11: begin Keys[0]:=VK_F11; Count:=1; end;
+    KVM_SPECIAL_START: begin Keys[0]:=$5b; Count:=1; end; // VK_LWIN
+    KVM_SPECIAL_CTRL_ESC: begin Keys[0]:=$11; Keys[1]:=$1b; Count:=2; end;
+    KVM_SPECIAL_ALT_TAB: begin Keys[0]:=$12; Keys[1]:=$09; Count:=2; end;
+    KVM_SPECIAL_TASK_MANAGER:
+      begin Keys[0]:=$11; Keys[1]:=$10; Keys[2]:=$1b; Count:=3; end;
+    KVM_SPECIAL_RUN: begin Keys[0]:=$5b; Keys[1]:=Ord('R'); Count:=2; end;
+    KVM_SPECIAL_EXPLORER: begin Keys[0]:=$5b; Keys[1]:=Ord('E'); Count:=2; end;
+    KVM_SPECIAL_DESKTOP: begin Keys[0]:=$5b; Keys[1]:=Ord('D'); Count:=2; end;
+    KVM_SPECIAL_LOCK:
+      begin
+        if MessageDlg(rsViewerDialogLockWarning,mtConfirmation,
+          [mbYes,mbNo],0)<>mrYes then Exit;
+        if not ControlAllowed then Exit;
+        Keys[0]:=$5b; Keys[1]:=Ord('L'); Count:=2;
+      end;
+    KVM_SPECIAL_ALT_F4: begin Keys[0]:=$12; Keys[1]:=$73; Count:=2; end;
+  else Exit;
+  end;
+
+  // The input queue preserves ordering. Release in reverse order so no
+  // modifier remains down after sending one of these shortcuts.
+  for I:=0 to Count-1 do SendPacket(MakeKey(True,Keys[I]));
+  for I:=Count-1 downto 0 do SendPacket(MakeKey(False,Keys[I]));
+end;
+
 procedure TKvmViewForm.ClipboardMenuClick(Sender: TObject);
 begin
   if Sender=FMenuClipToRemote then
@@ -802,6 +940,88 @@ begin
   Close;
 end;
 
+function TKvmViewForm.SessionStateDescription(Reason: Byte): string;
+begin
+  case Reason of
+    1: Result:=rsViewerSessionActive;
+    2: Result:=rsViewerSessionLocked;
+    3: Result:=rsViewerSessionInactive;
+    4: Result:=rsViewerSessionChanged;
+    5: Result:=rsViewerSessionCaptureLost;
+    else Result:=rsViewerSessionUnknown;
+  end;
+end;
+
+procedure TKvmViewForm.LanguageMenuClick(Sender: TObject);
+begin
+  if Sender=FMenuLanguageEN then SetViewerLanguage('en')
+  else if Sender=FMenuLanguageFR then SetViewerLanguage('fr')
+  else Exit;
+  FTranslations.SavePreference;
+end;
+
+procedure TKvmViewForm.ApplyTranslations;
+var I: Integer; Item: TMenuItem;
+begin
+  // Reapply all captions when the selected language changes; shortcuts and
+  // command IDs remain independent of translated display strings.
+  FFileMenu.Caption:=rsViewerMenuFile;
+  FMenuConnectionSettings.Caption:=rsViewerMenuConnectionSettings;
+  FMenuConnect.Caption:=rsViewerMenuConnect;
+  FMenuDisconnect.Caption:=rsViewerMenuDisconnect;
+  FMenuQuit.Caption:=rsViewerMenuQuit;
+  FMenuLanguage.Caption:=rsViewerMenuLanguage;
+  FMenuLanguageEN.Caption:=rsViewerMenuLanguageEn;
+  FMenuLanguageFR.Caption:=rsViewerMenuLanguageFr;
+  FViewMenu.Caption:=rsViewerMenuView;
+  FMenuMonitors.Caption:=rsViewerMenuMonitors;
+  FMenuRefresh.Caption:=rsViewerMenuRefresh;
+  FMenuFullscreen.Caption:=rsViewerMenuFullscreen+#9+'F11';
+  FControlMenu.Caption:=rsViewerMenuControl;
+  FMenuControl.Caption:=rsViewerMenuTakeControl;
+  FMenuKeyboardMode.Caption:=rsViewerMenuKeyboardMode;
+  FMenuUnicodeKeys.Caption:=rsViewerMenuKeyboardUnicode;
+  FMenuRemoteKeys.Caption:=rsViewerMenuKeyboardPhysical;
+  FMenuText.Caption:=rsViewerMenuText;
+  FMenuSpecialKeys.Caption:=rsViewerMenuSpecialKeys;
+  for I:=0 to FMenuSpecialKeys.Count-1 do
+  begin
+    Item:=FMenuSpecialKeys.Items[I];
+    case Item.Tag of
+      KVM_SPECIAL_SAS: Item.Caption:=rsViewerSpecialSas;
+      KVM_SPECIAL_F11: Item.Caption:=rsViewerSpecialF11;
+      KVM_SPECIAL_START: Item.Caption:=rsViewerSpecialStart;
+      KVM_SPECIAL_CTRL_ESC: Item.Caption:=rsViewerSpecialCtrlEsc;
+      KVM_SPECIAL_ALT_TAB: Item.Caption:=rsViewerSpecialAltTab;
+      KVM_SPECIAL_TASK_MANAGER: Item.Caption:=rsViewerSpecialTaskManager;
+      KVM_SPECIAL_RUN: Item.Caption:=rsViewerSpecialRun;
+      KVM_SPECIAL_EXPLORER: Item.Caption:=rsViewerSpecialExplorer;
+      KVM_SPECIAL_DESKTOP: Item.Caption:=rsViewerSpecialDesktop;
+      KVM_SPECIAL_LOCK: Item.Caption:=rsViewerSpecialLock;
+      KVM_SPECIAL_ALT_F4: Item.Caption:=rsViewerSpecialAltF4;
+    end;
+  end;
+  FMenuClipboard.Caption:=rsViewerMenuClipboard;
+  FMenuClipToRemote.Caption:=rsViewerMenuClipboardTo;
+  FMenuClipFromRemote.Caption:=rsViewerMenuClipboardFrom;
+  FLabelHost.Caption:=rsViewerLabelHost;
+  FLabelPort.Caption:=rsViewerLabelPort;
+  FLabelToken.Caption:=rsViewerLabelToken;
+  FTls.Caption:=rsViewerLabelTls;
+  FConnect.Caption:=rsViewerMenuConnect;
+  FDisconnect.Caption:=rsViewerMenuDisconnect;
+  FControl.Caption:=rsViewerMenuTakeControl;
+  FRefresh.Caption:=rsViewerMenuRefresh;
+  FText.Caption:=rsViewerLabelTextIme;
+  FRemoteKeys.Caption:=rsViewerLabelKeyboardPhysical;
+  FClipToRemote.Caption:=rsViewerMenuClipboardTo;
+  FClipFromRemote.Caption:=rsViewerMenuClipboardFrom;
+  FClipToRemote.Hint:=rsViewerHintClipboardTo;
+  FClipFromRemote.Hint:=rsViewerHintClipboardFrom;
+  FLabelClipboardHelp.Caption:=rsViewerLabelClipboardHelp;
+  RebuildMonitorMenu;
+end;
+
 procedure TKvmViewForm.SyncMainMenu;
 begin
   if FMenuConnectionSettings<>nil then FMenuConnectionSettings.Enabled:=(FSocket=nil);
@@ -809,11 +1029,14 @@ begin
   if FMenuDisconnect<>nil then FMenuDisconnect.Enabled:=(FDisconnect<>nil) and FDisconnect.Enabled;
   if FMenuRefresh<>nil then FMenuRefresh.Enabled:=(FRefresh<>nil) and FRefresh.Enabled;
   if FMenuFullscreen<>nil then FMenuFullscreen.Checked:=FFullScreenMode;
+  if FMenuLanguageEN<>nil then FMenuLanguageEN.Checked:=FTranslations.Language='en';
+  if FMenuLanguageFR<>nil then FMenuLanguageFR.Checked:=FTranslations.Language='fr';
   if FMenuControl<>nil then
   begin FMenuControl.Enabled:=FControl.Enabled; FMenuControl.Checked:=FControl.Checked; end;
   if FMenuUnicodeKeys<>nil then FMenuUnicodeKeys.Checked:=not FRemoteKeys.Checked;
   if FMenuRemoteKeys<>nil then FMenuRemoteKeys.Checked:=FRemoteKeys.Checked;
   if FMenuText<>nil then FMenuText.Enabled:=FText.Enabled;
+  if FMenuSpecialKeys<>nil then FMenuSpecialKeys.Enabled:=ControlAllowed;
   if FMenuClipToRemote<>nil then
   begin FMenuClipToRemote.Enabled:=FClipToRemote.Enabled; FMenuClipToRemote.Checked:=FClipToRemote.Checked; end;
   if FMenuClipFromRemote<>nil then
@@ -1247,8 +1470,8 @@ begin
   if FClipboardChanging then Exit;
   SyncClipboardOptions;
   if not ControlAllowed then Exit;
-  SetStatus('Clipboard: local -> remote='+BoolToStr(FClipToRemote.Checked,True)+
-    '; remote -> local='+BoolToStr(FClipFromRemote.Checked,True));
+  SetStatus(Format(rsViewerStatusClipboardDirection,
+    [BoolToStr(FClipToRemote.Checked,True),BoolToStr(FClipFromRemote.Checked,True)]));
 end;
 
 procedure TKvmViewForm.StopVideoWorker;
@@ -1346,18 +1569,18 @@ begin
   if (PortNum < 1) or (PortNum > 65535) or
      (Trim(FHost.Text) = '') or not ValidKvmToken(FToken.Text) then
   begin
-    MessageDlg('Enter a host, a valid port, and an ASCII token without spaces (16..256 characters).',
+    MessageDlg(rsViewerDialogInvalidConnection,
       mtWarning, [mbOK], 0);
     Exit;
   end;
 
   if not FTls.Checked and not FAllowInsecure and not KvmLoopbackHost(FHost.Text) then
   begin
-    SetStatus('TLS is required outside loopback. Use --allow-insecure only with a trusted tunnel/VPN.');
+    SetStatus(rsViewerStatusTlsRequired);
     Exit;
   end;
   FAutoControlPending := FAutoControl;
-  SetStatus('Connecting...');
+  SetStatus(rsViewerStatusConnecting);
   FConnect.Enabled := False;
   SyncMainMenu;
   // Reuse TLS options for the mORMot2 path that reports the HTTP
@@ -1366,7 +1589,7 @@ begin
   begin
     if (FTlsCaFile<>'') and not FileExists(FTlsCaFile) then
     begin
-      SetStatus('TLS CA file not found: ' + FTlsCaFile);
+      SetStatus(Format(rsViewerStatusCaMissing,[FTlsCaFile]));
       FConnect.Enabled := True;
       SyncMainMenu;
       Exit;
@@ -1384,7 +1607,7 @@ begin
   if not TargetURI.FromScheme(WS_SCHEME[FTls.Checked],
       RawUtf8(FHost.Text), RawUtf8(FPort.Text), KVM_WS_PATH) then
   begin
-    SetStatus('Invalid WebSocket address.');
+    SetStatus(rsViewerStatusInvalidWs);
     FConnect.Enabled := True;
     SyncMainMenu;
     Exit;
@@ -1425,12 +1648,12 @@ begin
     FPort.Enabled := False;
     FToken.Enabled := False;
     FTls.Enabled := False;
-    SetStatus('Socket open; authenticating...');
+    SetStatus(rsViewerStatusSocketOpen);
   except
     on E: Exception do
     begin
       CloseSocket;
-      SetStatus('Connection failed: ' + E.Message);
+      SetStatus(Format(rsViewerStatusConnectFailed,[E.Message]));
     end;
   end;
 end;
@@ -1438,7 +1661,7 @@ end;
 procedure TKvmViewForm.DisconnectClick(Sender: TObject);
 begin
   CloseSocket;
-  SetStatus('Disconnected');
+  SetStatus(rsViewerStatusDisconnected);
   FView.Invalidate;
 end;
 
@@ -1457,13 +1680,13 @@ begin
   begin
     FControlGranted := False;
     SendPacket('G'); // Request exclusive control from the SERVER.
-    SetStatus('Requesting exclusive control from server...');
+    SetStatus(rsViewerStatusControlRequest);
   end
   else
   begin
     FControlGranted := False;
     SendPacket('L'); // Server releases all held inputs on relinquish.
-    SetStatus('View only: control released.');
+    SetStatus(rsViewerStatusControlReleased);
   end;
   SyncViewCursor;
   SyncMainMenu;
@@ -1534,12 +1757,13 @@ begin
     {$IFDEF WINDOWS}if FWinPresenter<>nil then FWinPresenter.ClearCursor;{$ENDIF}
     SyncViewCursor;
     FInputs.CancelQueued;
-    SetStatus(DesktopStateText(Reason)+'. Control revoked.');
+    SetStatus(Format(rsViewerStatusControlRevoked,
+      [SessionStateDescription(Reason)]));
   end;
   if Available then
   begin
     FControl.Enabled := FAuthorized and FRemoteControl;
-    SetStatus('Desktop available. Request control again if needed.');
+    SetStatus(rsViewerStatusDesktopAvailable);
   end;
   SyncClipboardOptions;
   FView.Invalidate;
@@ -1553,14 +1777,16 @@ begin
   // A commit is not an IME event stream or a clipboard synchronization.
   SendPacket('Z'); ResetLocalInputs;
   Value := '';
-  if not InputQuery('Text input', 'Text entered using your input method (256 characters max)', Value) then Exit;
+  if not InputQuery(rsViewerDialogTextTitle,
+    rsViewerDialogTextMessage,
+    Value) then Exit;
   // Lazarus LCL strings are already UTF-8. Copy their bytes without an
   // intermediate AnsiString code-page conversion.
   SetLength(Utf8Bytes,Length(Value));
   if Length(Value)>0 then Move(Value[1],Utf8Bytes[1],Length(Value));
   Packet := MakeTextUtf8(Utf8Bytes);
   if Packet = '' then
-    SetStatus('Text rejected: limit 256 Unicode code points / 1024 bytes, no control characters.')
+    SetStatus(rsViewerStatusTextRejected)
   else if ControlAllowed then SendPacket(Packet);
 end;
 
@@ -1755,7 +1981,7 @@ begin
 
   if (FFront.Surface.Width<>Snapshot.Surface.Width) or
      (FFront.Surface.Height<>Snapshot.Surface.Height) then
-    SetStatus(Format('Remote desktop: %d x %d | video worker',
+    SetStatus(Format(rsViewerStatusRemoteDesktop,
       [Snapshot.Surface.Width,Snapshot.Surface.Height]));
 
   OldOverlayVisible:=FRemoteCursorOverlay and FCursorVisible;
@@ -1848,7 +2074,7 @@ begin
   try
     if FTransportFault then
     begin
-      CloseSocket; SetStatus('Network send interrupted: input will not be replayed.'); Exit;
+      CloseSocket; SetStatus(rsViewerStatusSendInterrupted); Exit;
     end;
     if FAutoConnect then begin FAutoConnect:=False; ConnectClick(nil); end;
     HasSnapshot:=False; FatalError:='';
@@ -1868,7 +2094,7 @@ begin
       FRemoteControl := True;
       FControl.Enabled := not FDesktopPaused;
       FRefresh.Enabled := True;
-      SetStatus('Connected | control available.');
+      SetStatus(rsViewerStatusConnectedControl);
       SyncMainMenu;
     end
     else if TextMsg = 'OK VIEW' then
@@ -1877,14 +2103,15 @@ begin
       FRemoteControl := False;
       FControl.Enabled := False;
       FRefresh.Enabled := True;
-      SetStatus('Connected | view only.');
+      SetStatus(rsViewerStatusConnectedView);
       SyncMainMenu;
     end
     else if TextMsg = 'CTRL GRANTED' then
     begin
       FControlGranted := not FDesktopPaused;
       FText.Enabled := FControlGranted;
-      SetStatus('EXCLUSIVE control granted: click inside the desktop.');
+      SetStatus(rsViewerStatusControlGranted);
+      SyncMainMenu;
     end
     else if TextMsg = 'CTRL BUSY' then
     begin
@@ -1892,18 +2119,26 @@ begin
       FText.Enabled := False;
       FControl.Checked := False;
       ResetLocalInputs;
-      SetStatus('Another client currently controls the desktop.');
+      SetStatus(rsViewerStatusControlBusy);
+      SyncMainMenu;
     end
     else if TextMsg = 'CTRL RELEASED' then
     begin
       FControlGranted := False;
       FText.Enabled := False;
       ResetLocalInputs;
+      SyncMainMenu;
     end
     else if Copy(TextMsg,1,15) = 'MONITOR_LAYOUT ' then
       ParseMonitorLayout(TextMsg)
+    else if TextMsg = 'SAS REQUESTED' then
+      SetStatus(rsViewerStatusSasRequested)
+    else if TextMsg = 'SAS UNAVAILABLE' then
+      SetStatus(rsViewerStatusSasUnavailable)
+    else if TextMsg = 'SAS DENIED' then
+      SetStatus(rsViewerStatusSasDenied)
     else if TextMsg = 'ERR INPUT' then
-      SetStatus('Input unsupported or rejected by the remote system. Text may be incomplete.')
+      SetStatus(rsViewerStatusInputUnsupported)
     else if (TextMsg = 'ERR AUTH') or (TextMsg = 'ERR LIMIT') or
             (Copy(TextMsg,1,6) = 'CLOSED') or (TextMsg = 'ERR TIMEOUT') or
             (TextMsg = 'ERR PROTOCOL') or (Copy(TextMsg,1,15) = 'LOCAL PROTOCOL:') then
@@ -1912,17 +2147,17 @@ begin
       KvmClientLog('[client-ws] ' + TextMsg);
       CloseSocket;
       if TextMsg = 'ERR AUTH' then
-        SetStatus('Authentification refusee')
+        SetStatus(rsViewerStatusAuthDenied)
       else if TextMsg = 'ERR LIMIT' then
-        SetStatus('Maximum number of clients reached')
+        SetStatus(rsViewerStatusClientLimit)
       else if TextMsg = 'ERR TIMEOUT' then
-        SetStatus('Session ended: server reported a timeout')
+        SetStatus(rsViewerStatusTimeout)
       else if TextMsg = 'ERR PROTOCOL' then
-        SetStatus('Server reported a protocol error')
+        SetStatus(rsViewerStatusProtocolError)
       else if Copy(TextMsg,1,15) = 'LOCAL PROTOCOL:' then
-        SetStatus('LOCAL receive error: ' + Copy(TextMsg,17,200))
+        SetStatus(Format(rsViewerStatusLocalReceive,[Copy(TextMsg,17,200)]))
       else
-        SetStatus('WebSocket fermee : ' + TextMsg + ' (origine a determiner)');
+        SetStatus(Format(rsViewerStatusSocketClosed,[TextMsg]));
       Exit;
     end;
   end;
@@ -1934,7 +2169,7 @@ begin
     if FatalError<>'' then
     begin
       KvmClientLog('[client-video] worker error: '+FatalError);
-      CloseSocket; SetStatus('Video error: '+FatalError); Exit;
+      CloseSocket; SetStatus(Format(rsViewerStatusVideoError,[FatalError])); Exit;
     end;
     // Desktop transitions and input receipts are never coalesced/dropped.
     for I:=0 to High(Events) do
@@ -1942,13 +2177,13 @@ begin
         'D':
           if ReadDesktopState(Events[I],Available,Reason,Epoch) then
             ApplyDesktopState(Available,Reason,Epoch)
-          else begin CloseSocket; SetStatus('Invalid session state'); Exit; end;
+          else begin CloseSocket; SetStatus(rsViewerStatusInvalidSession); Exit; end;
         'I':
           begin
             if not FInputs.Receipt(Events[I],InputStatus,Applied) then
-            begin CloseSocket; SetStatus('Invalid input acknowledgment'); Exit; end;
+            begin CloseSocket; SetStatus(rsViewerStatusInvalidAck); Exit; end;
             if InputStatus=KVM_INPUT_STALE then
-            begin CloseSocket; SetStatus('Input sequence out of sync'); Exit; end;
+            begin CloseSocket; SetStatus(rsViewerStatusInputDesync); Exit; end;
             if InputStatus<>KVM_INPUT_OK then
             begin
               FInputs.CancelQueued;
@@ -1958,7 +2193,7 @@ begin
               // have changed modifier state and therefore still releases control.
               if InputStatus=KVM_INPUT_PARTIAL then
               begin TransmitPacket('Z'); ResetLocalInputs; end;
-              SetStatus(Format('Input rejected/partial (%d, %d code points)',[InputStatus,Applied]));
+              SetStatus(Format(rsViewerStatusInputPartial,[InputStatus,Applied]));
             end;
             DrainInputs;
           end;
@@ -1979,7 +2214,7 @@ begin
     if HasSnapshot then
       try PresentSnapshot(Snapshot);
       except on E: Exception do
-        begin CloseSocket; SetStatus('Display failed: '+E.Message); Exit; end; end;
+        begin CloseSocket; SetStatus(Format(rsViewerStatusDisplayFailed,[E.Message])); Exit; end; end;
     if FPendingMouseMove and ControlAllowed and
        (GetTickCount64-FLastMouseTick>=KVM_MOUSE_INTERVAL_MS) then
     begin
@@ -1987,7 +2222,7 @@ begin
       SendPacket(MakeMouse(0,0,FPendingMouseX,FPendingMouseY));
     end;
     if FInputs.TimedOut(GetTickCount64) then
-    begin CloseSocket; SetStatus('Input acknowledgment missing: no retransmission'); Exit; end;
+    begin CloseSocket; SetStatus(rsViewerStatusInputAckMissing); Exit; end;
     if GetTickCount64-FLastHeartbeat>=3000 then
     begin FLastHeartbeat:=GetTickCount64; SendPacket('P'); end;
     NowTick:=GetTickCount64;
@@ -2042,7 +2277,7 @@ begin
   if (FFront.Surface.Width<1) or (FFront.Surface.Height<1) then
   begin
     FView.Canvas.Font.Color:=clWhite;
-    FView.Canvas.TextOut(20,20,'Waiting for remote desktop...');
+    FView.Canvas.TextOut(20,20,rsViewerViewWaiting);
     Exit;
   end;
   if not BuildDisplayLayout(Items) then Exit;
@@ -2151,7 +2386,7 @@ begin
   Result:=False;
   if Payload='' then Exit;
   case Payload[1] of
-    'P','R','G','L','Z': Result:=Length(Payload)=1;
+    'P','R','G','L','Z','Q': Result:=Length(Payload)=1;
     'A': Result:=ReadBatchAck(Payload,Serial);
     'N': Result:=ReadBatchNack(Payload,Serial);
     'M': Result:=ReadMouse(Payload,MouseAction,Button,MX,MY);
@@ -2178,7 +2413,7 @@ begin
     KvmClientLog('[client-input] invalid outgoing packet blocked before WebSocket (type='+
       IntToStr(Ord(Payload[1]))+', longueur='+IntToStr(Length(Payload))+')');
     if Payload[1]='X' then FInputs.Reset;
-    SetStatus('Invalid local input blocked before sending.');
+    SetStatus(rsViewerStatusInputBlocked);
     Exit;
   end;
   Frame.opcode := focBinary;
@@ -2203,13 +2438,13 @@ end;
 procedure TKvmViewForm.SendPacket(const Payload: RawByteString);
 begin
   if (Payload='') or not FAuthorized or FTransportFault then Exit;
-  if Payload[1] in ['K','M','W','U'] then
+  if Payload[1] in ['K','M','W','U','Q'] then
   begin
     if not ControlAllowed then Exit;
     if not FInputs.Push(Payload) then
     begin
       FInputs.CancelQueued; TransmitPacket('Z'); ResetLocalInputs;
-      SetStatus('Input queue full: unsent events discarded, keys released.'); Exit;
+      SetStatus(rsViewerStatusInputQueueFull); Exit;
     end;
     DrainInputs;
   end
@@ -2230,9 +2465,9 @@ begin
   if FAuthorized and FControlGranted then SendPacket('Z');
   ResetLocalInputs;
   if FRemoteKeys.Checked then
-    SetStatus('Physical keys: the remote desktop keyboard layout and input methods apply.')
+    SetStatus(rsViewerStatusKeyboardPhysical)
   else
-    SetStatus('Automatic mode: locally composed Unicode text; shortcuts and special keys sent separately.');
+    SetStatus(rsViewerStatusKeyboardAuto);
   SyncMainMenu;
 end;
 

@@ -20,6 +20,7 @@ procedure InjectMouse(Action, Button: Byte; NX, NY: Word);
 procedure InjectText(CodePoint: Cardinal);
 procedure InjectKey(Pressed: Boolean; VKey: Word);
 procedure InjectWheel(Notches: SmallInt);
+function RequestDesktopSecureAttention: Boolean;
 implementation
 uses SysUtils, kvm_monitors, kvm_session_guard,
   {$IFDEF WINDOWS}Windows, kvm_capture_win, kvm_capture_dxgi, kvm_windows_session, kvm_inject_win;{$ENDIF}
@@ -286,6 +287,13 @@ begin
   LinuxRawKey(Pressed,VKey);
   {$ENDIF}
   {$IFDEF DARWIN}kvm_inject_mac.InjectKey(Pressed,VKey);{$ENDIF}
+end;
+function RequestDesktopSecureAttention: Boolean;
+begin
+  // Only Windows has a standard SAS API. Do NOT fake Ctrl+Alt+Del with
+  // ordinary key events on other platforms (nor on Windows).
+  Result:=False;
+  {$IFDEF WINDOWS}Result:=kvm_inject_win.RequestSecureAttention;{$ENDIF}
 end;
 procedure InjectWheel(Notches: SmallInt);
 begin

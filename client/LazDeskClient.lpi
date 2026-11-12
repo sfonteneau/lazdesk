@@ -10,6 +10,10 @@
       <Title Value="LazDeskClient" />
       <Scaled Value="True" />
     </General>
+    <i18n>
+      <EnableI18N Value="True" LFM="False" />
+      <OutDir Value="languages" />
+    </i18n>
     <BuildModes>
       <Item Name="Default" Default="True" />
     </BuildModes>
@@ -31,6 +35,10 @@
       </Unit>
       <Unit>
         <Filename Value="kvm_view_form.pas" />
+        <IsPartOfProject Value="True" />
+      </Unit>
+      <Unit>
+        <Filename Value="kvm_viewer_i18n.pas" />
         <IsPartOfProject Value="True" />
       </Unit>
       <Unit>

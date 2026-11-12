@@ -21,6 +21,7 @@ type
     function GetConnected: Boolean;
     function GetAuthenticated: Boolean;
     function GetControlGranted: Boolean;
+    function GetLanguage: string;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -30,10 +31,12 @@ type
     procedure TakeControl(Enabled: Boolean);
     procedure RefreshDesktop;
     procedure ReleaseLocalInputs;
+    procedure SetLanguage(const Code: string);
     property StatusText: string read GetStatusText;
     property Connected: Boolean read GetConnected;
     property Authenticated: Boolean read GetAuthenticated;
     property HasControl: Boolean read GetControlGranted;
+    property Language: string read GetLanguage write SetLanguage;
     property OnStatusChange: TNotifyEvent read FOnStatusChange write FOnStatusChange;
   end;
 
@@ -123,6 +126,16 @@ end;
 procedure TKvmViewerFrame.ReleaseLocalInputs;
 begin
   FViewer.ReleaseLocalInputs;
+end;
+
+procedure TKvmViewerFrame.SetLanguage(const Code: string);
+begin
+  FViewer.SetViewerLanguage(Code);
+end;
+
+function TKvmViewerFrame.GetLanguage: string;
+begin
+  Result:=FViewer.ViewerLanguage;
 end;
 
 function TKvmViewerFrame.GetStatusText: string;
