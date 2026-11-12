@@ -380,6 +380,13 @@ def make_projects(target: str, search: list[str], os_name: str,
         if fpc:
             set_value('CompilerOptions/Other/CompilerPath', fpc)
         options = '-dKVM_STANDALONE'
+        if os_name == 'win32':
+            # Compact 32-bit Windows release profile. Keep the existing
+            # standalone native archives: no TurboJPEG/DXGI runtime DLLs.
+            # -CX makes LazDesk units smart-linkable, and -XX drops unused
+            # routines where the RTL/LCL/mORMot packages support smartlinking.
+            # -Os favours smaller code; -Xs strips the finished PE executable.
+            options += ' -O2 -Os -g- -CX -XX -Xs'
         if os_name == 'darwin':
             options += ' -WM12.3'
         if is_windows(os_name):
