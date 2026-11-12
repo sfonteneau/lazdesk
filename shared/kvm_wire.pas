@@ -7,7 +7,7 @@ interface
 uses SysUtils;
 
 const
-  KVM_SUBPROTOCOL = 'lazdesk8'; // clipboard cQ/cR; rebuild both peers
+  KVM_SUBPROTOCOL = 'lazdesk9'; // atomic shortcuts + Windows lock; rebuild both peers
   // Public URL path sent by the client, including the initial slash.
   KVM_WS_PATH = '/kvm';
   // mORMot2.ServerUpgrade removes the initial slash before CloneByName/UpgradeUri.
@@ -21,6 +21,7 @@ const
   KVM_MAX_TEXT_SCALARS = 256;
   KVM_MAX_CURSOR_SIDE = 256;
   KVM_CURSOR_SHAPE_HEADER = 13;
+  KVM_MAX_SHORTCUT_KEYS = 3;
   KVM_TILE_SIZE = 256;
   // 4:4:4 TurboJPEG worst-case buffer: 512*512*6+2048 < 2 MiB.
   // Larger 4:4:4 rectangles can exceed KVM_MAX_JPEG_BYTES before encoding.
@@ -35,6 +36,8 @@ const
   //   M + action:u8 + button:u8 + x:u16 + y:u16  mouse
   //   K + pressed:u8 + VK:u16                    LCL/Win32 virtual key
   //   Q                                          Windows secure attention (SAS) request
+  //   J                                          Windows session lock request
+  //   Y + count:u8 + VK:u8[count]                atomic shortcut (2..3 keys)
   //   W + wheel-notches:i16                      wheel
   //   C + visible:u8 + normalized-x:u16 + normalized-y:u16   remote pointer position
   //   H + revision:u32 + w:u16 + h:u16 + hot-x:u16 + hot-y:u16
@@ -51,6 +54,9 @@ const
 
 type
   TKvmCodePoints = array of Cardinal;
+  TKvmShortcutKeys = array of Word;
+  TKvmSasResult = (ksrUnavailable, ksrNeedsPrivileges, ksrRequested);
+  TKvmLockResult = (klrUnavailable, klrFailed, klrRequested);
 
   TKvmCursorShape = record
     Revision: Cardinal;
@@ -73,6 +79,8 @@ function ReadMouse(const S: RawByteString; out Action, Button: Byte;
 function MakeKey(Pressed: Boolean; VKey: Word): RawByteString;
 function ReadKey(const S: RawByteString; out Pressed: Boolean;
   out VKey: Word): Boolean;
+function MakeShortcut(const Keys: array of Word): RawByteString;
+function ReadShortcut(const S: RawByteString; out Keys: TKvmShortcutKeys): Boolean;
 function MakeTextUtf8(const Utf8: RawByteString): RawByteString;
 function ReadTextUtf8(const Packet: RawByteString;
   out CodePoint: Cardinal): Boolean;
@@ -214,6 +222,32 @@ begin
   Pressed := S[2] = #1;
   VKey := GetWordLE(S, 3);
   Result := ((S[2] = #0) or (S[2] = #1)) and (VKey > 0) and (VKey <= 255);
+end;
+
+function MakeShortcut(const Keys: array of Word): RawByteString;
+var I: Integer;
+begin
+  Result:='';
+  if (Length(Keys)<2) or (Length(Keys)>KVM_MAX_SHORTCUT_KEYS) then Exit;
+  for I:=0 to High(Keys) do
+    if (Keys[I]<1) or (Keys[I]>255) then Exit;
+  SetLength(Result,2+Length(Keys));
+  Result[1]:='Y'; Result[2]:=AnsiChar(Length(Keys));
+  for I:=0 to High(Keys) do Result[I+3]:=AnsiChar(Keys[I]);
+end;
+
+function ReadShortcut(const S: RawByteString; out Keys: TKvmShortcutKeys): Boolean;
+var I,N: Integer;
+begin
+  Result:=False;
+  SetLength(Keys,0);
+  if (Length(S)<4) or (Length(S)>2+KVM_MAX_SHORTCUT_KEYS) or (S[1]<>'Y') then Exit;
+  N:=Ord(S[2]);
+  if (N<2) or (N>KVM_MAX_SHORTCUT_KEYS) or (Length(S)<>N+2) then Exit;
+  for I:=3 to Length(S) do if S[I]=#0 then Exit;
+  SetLength(Keys,N);
+  for I:=0 to N-1 do Keys[I]:=Ord(S[I+3]);
+  Result:=True;
 end;
 
 function ReadTextUtf8(const Packet: RawByteString;

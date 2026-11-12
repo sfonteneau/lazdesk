@@ -8,10 +8,21 @@ begin Inc(Count); if not Value then raise Exception.Create(Name); end;
 var
   R: TKvmRate; Q: TKvmInputQueue; P,S: RawByteString;
   Serial,Epoch: Cardinal; W,H,Applied: Word; Status,Reason: Byte;
-  Available: Boolean; Points: TKvmCodePoints; F: TRgbFrame;
+  Available: Boolean; Points: TKvmCodePoints; Shortcut: TKvmShortcutKeys; F: TRgbFrame;
   I: Integer;
 begin
-  Check(KVM_SUBPROTOCOL='lazdesk8','protocol');
+  Check(KVM_SUBPROTOCOL='lazdesk9','protocol');
+  P:=MakeShortcut([$11,$1b]);
+  Check((P='Y'+#2+#$11+#$1b) and ReadShortcut(P,Shortcut) and
+    (Length(Shortcut)=2) and (Shortcut[0]=$11) and (Shortcut[1]=$1b),
+    'ctrl-esc roundtrip');
+  Check(ReadShortcut(MakeShortcut([$11,$10,$1b]),Shortcut) and
+    (Length(Shortcut)=3) and (Shortcut[2]=$1b),'three-key chord');
+  Check(MakeShortcut([$11])='','one-key shortcut rejected');
+  Check(MakeShortcut([$11,0])='','null virtual key rejected');
+  Check(not ReadShortcut('Y'+#2+#$11,Shortcut),'truncated shortcut rejected');
+  Check(not ReadShortcut('Y'+#3+#$11+#$1b,Shortcut),'bad count rejected');
+  Check(not ReadShortcut('Y'+#2+#$11+#0,Shortcut),'zero key rejected');
   Check(not ReadKey(MakeKey(True,0),Available,W),'zero virtual key rejected');
   Check(SecureTokenEqual('abcdefghijklmnop','abcdefghijklmnop'),'equal');
   Check(not SecureTokenEqual('abcdefghijklmnop','bbcdefghijklmnop'),'unequal');

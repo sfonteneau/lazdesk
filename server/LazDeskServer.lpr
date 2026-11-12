@@ -77,9 +77,9 @@ begin
   try
     Server := TKvmServer.Create(Options);
     if Options.TLSCert <> '' then
-      WriteLn('Listening: wss://', BindAddress, '/kvm ; protocole lazdesk8')
+      WriteLn('Listening: wss://', BindAddress, '/kvm ; protocole lazdesk9')
     else
-      WriteLn('Listening: ws://', BindAddress, '/kvm ; protocole lazdesk8');
+      WriteLn('Listening: ws://', BindAddress, '/kvm ; protocole lazdesk9');
     if Options.FPS=0 then
       WriteLn('JPEG streaming: unlimited frame rate (capture/CPU/ACK); JPEG quality ',
         Options.Quality)

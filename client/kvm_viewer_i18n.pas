@@ -43,7 +43,6 @@ resourcestring
   rsViewerSpecialExplorer = 'Win+E (Explorer)';
   rsViewerSpecialDesktop = 'Win+D (desktop)';
   rsViewerSpecialLock = 'Win+L (lock remote session)';
-  rsViewerSpecialAltF4 = 'Alt+F4 (close window)';
   rsViewerLabelHost = 'Host / IP';
   rsViewerLabelPort = 'Port';
   rsViewerLabelToken = 'Connection token';
@@ -90,6 +89,11 @@ resourcestring
   rsViewerStatusControlBusy = 'Another client currently controls the desktop.';
   rsViewerStatusSasRequested = 'Ctrl+Alt+Del requested. Windows may block it (service/uiAccess and SAS policy required).';
   rsViewerStatusSasUnavailable = 'Ctrl+Alt+Del unavailable: remote host is not Windows or lacks sas.dll.';
+  rsViewerStatusSasPrivileges = 'Ctrl+Alt+Del not permitted: the remote host requires a Windows service or signed uiAccess application and SAS policy.';
+  rsViewerStatusLockRequested = 'Remote Windows session lock requested.';
+  rsViewerStatusLockUnavailable = 'Lock unavailable: the remote host is not Windows.';
+  rsViewerStatusLockFailed = 'Remote Windows session could not be locked (interactive session required).';
+  rsViewerStatusLockDenied = 'Lock denied: exclusive control or active desktop required.';
   rsViewerStatusSasDenied = 'Ctrl+Alt+Del denied: exclusive control or active desktop required.';
   rsViewerStatusInputUnsupported = 'Input unsupported or rejected by the remote system. Text may be incomplete.';
   rsViewerStatusAuthDenied = 'Authentication refused';

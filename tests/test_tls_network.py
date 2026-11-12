@@ -80,7 +80,7 @@ class Fixture:
                          (line.split(':',1) for line in request.decode('ascii').split('\r\n')[1:] if ':' in line)}
                 accept=base64.b64encode(hashlib.sha1((headers['sec-websocket-key']+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').encode()).digest()).decode()
                 reply=('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
-                       f'Sec-WebSocket-Accept: {accept}\r\nSec-WebSocket-Protocol: lazdesk8\r\n\r\n')
+                       f'Sec-WebSocket-Accept: {accept}\r\nSec-WebSocket-Protocol: lazdesk9\r\n\r\n')
                 sock.sendall(reply.encode('ascii'))
                 if sock.recv(4096):sock.sendall(b'\x88\x02\x03\xe8')
         except (ssl.SSLError,ConnectionError,TimeoutError,OSError):pass

@@ -147,6 +147,8 @@ type
       const Packet: RawByteString): RawByteString;
     procedure HandleKey(ID: THttpServerConnectionID; Pressed: Boolean; VKey: Word);
     procedure HandleSecureAttention(ID: THttpServerConnectionID);
+    procedure HandleShortcut(ID: THttpServerConnectionID; const Keys: TKvmShortcutKeys);
+    procedure HandleRemoteLock(ID: THttpServerConnectionID);
     procedure HandleWheel(ID: THttpServerConnectionID; Notches: SmallInt);
     procedure HandleFrame(Sender: TWebSocketProcess; const Frame: TWebSocketFrame);
     procedure SendText(ID: THttpServerConnectionID; const Msg: RawByteString);
@@ -1222,6 +1224,43 @@ begin
   end;
 end;
 
+procedure TKvmServer.HandleShortcut(ID: THttpServerConnectionID;
+  const Keys: TKvmShortcutKeys);
+var I: Integer;
+begin
+  EnterCriticalSection(FLock);
+  try
+    I:=FindClientLocked(ID);
+    if (I<0) or not FClients[I].CanControl or (FController<>ID) or
+       not FDesktopAvailable or not DesktopSessionAvailable then Exit;
+    // The transaction leaves no held keys in FClients[I].Keys. A Windows
+    // SendInput array is atomic; held keys are released on the other hosts.
+    InjectDesktopShortcut(Keys);
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+end;
+
+procedure TKvmServer.HandleRemoteLock(ID: THttpServerConnectionID);
+var I: Integer; Status: RawByteString;
+begin
+  Status:='LOCK DENIED';
+  EnterCriticalSection(FLock);
+  try
+    I:=FindClientLocked(ID);
+    if (I>=0) and FClients[I].CanControl and (FController=ID) and
+       FDesktopAvailable and DesktopSessionAvailable then
+    begin
+      case RequestDesktopLock of
+        klrRequested: Status:='LOCK REQUESTED';
+        klrFailed: Status:='LOCK FAILED';
+      else Status:='LOCK UNAVAILABLE';
+      end;
+    end;
+  finally LeaveCriticalSection(FLock); end;
+  SendText(ID,Status);
+end;
+
 procedure TKvmServer.HandleSecureAttention(ID: THttpServerConnectionID);
 var
   I: Integer;
@@ -1236,8 +1275,11 @@ begin
     if (I>=0) and FClients[I].CanControl and (FController=ID) and
        FDesktopAvailable and DesktopSessionAvailable then
     begin
-      if RequestDesktopSecureAttention then Status:='SAS REQUESTED'
+      case RequestDesktopSecureAttention of
+        ksrRequested: Status:='SAS REQUESTED';
+        ksrNeedsPrivileges: Status:='SAS PRIVILEGES';
       else Status:='SAS UNAVAILABLE';
+      end;
     end;
   finally
     LeaveCriticalSection(FLock);
@@ -1487,7 +1529,8 @@ begin
 end;
 
 procedure TKvmServer.HandleIncoming(ID: THttpServerConnectionID; const Frame: TWebSocketFrame);
-var Action,Button: Byte; X,Y,VKey: Word;
+var ShortcutKeys: TKvmShortcutKeys;
+  Action,Button: Byte; X,Y,VKey: Word;
   Pressed,ControlRight,WantH264,Valid: Boolean; Wheel: SmallInt;
   Serial: Cardinal; Points: TKvmCodePoints; Token,Caps,Receipt: RawByteString;
   Split: Integer; Reply: TWebSocketFrameDynArray;
@@ -1540,11 +1583,12 @@ begin
       end;
       Valid:=False;
       case Frame.payload[1] of
-        'P','R','G','L','Z','Q': Valid:=Length(Frame.payload)=1;
+        'P','R','G','L','Z','Q','J': Valid:=Length(Frame.payload)=1;
         'A': Valid:=ReadBatchAck(Frame.payload,Serial);
         'N': Valid:=ReadBatchNack(Frame.payload,Serial);
         'M': Valid:=ReadMouse(Frame.payload,Action,Button,X,Y);
         'K': Valid:=ReadKey(Frame.payload,Pressed,VKey);
+        'Y': Valid:=ReadShortcut(Frame.payload,ShortcutKeys);
         'W': Valid:=ReadWheel(Frame.payload,Wheel);
         'X': Valid:=ReadTextRequestServer(Frame.payload,Serial,Points);
       end;
@@ -1599,6 +1643,8 @@ begin
           'M': HandleMouse(ID,Action,Button,X,Y);
           'K': HandleKey(ID,Pressed,VKey);
           'Q': HandleSecureAttention(ID);
+          'J': HandleRemoteLock(ID);
+          'Y': HandleShortcut(ID,ShortcutKeys);
           'W': HandleWheel(ID,Wheel);
           'X':
           begin

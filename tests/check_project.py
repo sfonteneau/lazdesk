@@ -79,7 +79,7 @@ worker = text("client/kvm_video_worker.pas")
 flow = text("shared/kvm_flow.pas")
 video = text("server/kvm_video.pas")
 cli = text("shared/kvm_cli.pas")
-check("KVM_SUBPROTOCOL = 'lazdesk8'" in wire, "Protocol must be v9 only")
+check("KVM_SUBPROTOCOL = 'lazdesk9'" in wire, "Protocol must be v9 only")
 for source in [*ROOT.rglob("*.pas"), *ROOT.rglob("*.lpr")]:
     check(not re.search(r"lazdesk[0-6]\b", source.read_text()), f"Old protocol in {source}")
 for word in ["MakeBatchNack", "ReadBatchNack", "ReadCursor", "ReadTextUtf8", "KVM_MAX_FRAME_PIXELS"]:

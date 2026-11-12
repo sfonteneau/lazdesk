@@ -58,7 +58,7 @@ def placeholders(value):
 
 def test_native_resourcestrings_are_complete_and_referenced():
     resources = original_resources()
-    assert len(resources) == 107
+    assert len(resources) == 111
     assert 'resourcestring' in I18N
     assert '{$codepage utf8}' in I18N
     assert 'function TKvmViewForm.Tr(' not in VIEW
@@ -75,6 +75,9 @@ def test_native_resourcestrings_are_complete_and_referenced():
         assert placeholders(source) == placeholders(fr[ident][1]), ident
     assert fr['kvm_viewer_i18n.rsviewerspecialf11'][1] == 'F11 (distant)'
     assert 'Suppr' in fr['kvm_viewer_i18n.rsviewerspecialsas'][1]
+    assert 'Alt+F4' not in I18N
+    for status in ('LockRequested','LockUnavailable','LockFailed','LockDenied','SasPrivileges'):
+        assert 'rsViewerStatus'+status in I18N
     assert all('F8' not in entry[1] for key, entry in fr.items()
                if '.rsviewerspecial' in key)
 
@@ -112,7 +115,7 @@ def test_live_switch_updates_every_open_viewer_without_remote_input():
     translate = VIEW.split('procedure TKvmViewForm.ApplyTranslations;', 1)[1]
     translate = translate.split('procedure TKvmViewForm.SyncMainMenu;', 1)[0]
     for name in ('Sas', 'F11', 'Start', 'CtrlEsc', 'AltTab', 'TaskManager',
-                 'Run', 'Explorer', 'Desktop', 'Lock', 'AltF4'):
+                 'Run', 'Explorer', 'Desktop', 'Lock'):
         assert 'rsViewerSpecial' + name in translate
     assert 'RebuildMonitorMenu;' in translate
     assert 'SendPacket' not in translate

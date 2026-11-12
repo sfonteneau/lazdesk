@@ -24,11 +24,12 @@ type
   end;
 implementation
 function TKvmInputQueue.Push(const Packet: RawByteString): Boolean;
-var N: Integer; Points: TKvmCodePoints;
+var N: Integer; Points: TKvmCodePoints; Keys: TKvmShortcutKeys;
 begin
   Result:=False;
-  if (Packet='') or not (Packet[1] in ['K','M','W','U','Q']) then Exit;
-  if (Packet[1]='Q') and (Length(Packet)<>1) then Exit;
+  if (Packet='') or not (Packet[1] in ['K','M','W','U','Q','J','Y']) then Exit;
+  if (Packet[1] in ['Q','J']) and (Length(Packet)<>1) then Exit;
+  if (Packet[1]='Y') and not ReadShortcut(Packet,Keys) then Exit;
   if (Packet[1]='U') and not ReadTextCommit(Packet,Points) then Exit;
   N:=Length(FItems);
   // Replace only the last *unsent* pure mouse move. Never cross a key,

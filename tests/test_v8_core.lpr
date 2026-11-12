@@ -44,6 +44,6 @@ begin
   Check(Ord(G.RGB[I])=100,'cursor does not mutate shared frame alias');
   Check(CompositeCursor(F,4,4,-20,-20,1,1,Pixels),'offscreen cursor safely clipped');
   Check(KvmKeysym($25)=$ff51,'left key mapping');
-  Check(KVM_SUBPROTOCOL='lazdesk8','v8 protocol only');
+  Check(KVM_SUBPROTOCOL='lazdesk9','v8 protocol only');
   WriteLn('PASS: Pascal v8 commit/limits/serial wrap/cursor/frame/keysym tests');
 end.

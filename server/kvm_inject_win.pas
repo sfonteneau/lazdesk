@@ -12,8 +12,10 @@ function GetCursorState(out NX, NY: Word; out Shape: TKvmCursorShape): Boolean;
 procedure InjectMouse(Action, Button: Byte; NX, NY: Word);
 procedure InjectText(CodePoint: Cardinal);
 procedure InjectKey(Pressed: Boolean; VKey: Word);
+procedure InjectShortcut(const Keys: TKvmShortcutKeys);
 procedure InjectWheel(Notches: SmallInt);
-function RequestSecureAttention: Boolean;
+function RequestSecureAttention: TKvmSasResult;
+function RequestRemoteLock: Boolean;
 
 implementation
 
@@ -41,6 +43,38 @@ var
 
 function KvmSendInput(Count: UINT; Inputs: Pointer; InputSize: Integer): UINT;
   stdcall; external 'user32.dll' name 'SendInput';
+function KvmWinLockWorkStation: LongBool; stdcall;
+  external 'user32.dll' name 'LockWorkStation';
+function KvmWinOpenProcessToken(ProcessHandle: THandle; DesiredAccess: DWORD;
+  out TokenHandle: THandle): LongBool; stdcall;
+  external 'advapi32.dll' name 'OpenProcessToken';
+function KvmWinGetTokenInformation(TokenHandle: THandle; InformationClass: DWORD;
+  Information: Pointer; InformationLength: DWORD; out ReturnLength: DWORD): LongBool;
+  stdcall; external 'advapi32.dll' name 'GetTokenInformation';
+function KvmWinProcessIdToSessionId(ProcessId: DWORD; out SessionId: DWORD): LongBool;
+  stdcall; external 'kernel32.dll' name 'ProcessIdToSessionId';
+
+function KvmWinCanRequestSas(out AsUser: LongBool): Boolean;
+var Token: THandle; UiAccess, BytesReturned, SessionId: DWORD;
+begin
+  Result:=False;
+  AsUser:=True;
+  // Non-service callers require a signed, protected-location uiAccess token.
+  // TokenUIAccess=26 in TOKEN_INFORMATION_CLASS; elevated admin alone is not enough.
+  Token:=0;
+  if KvmWinOpenProcessToken(Windows.GetCurrentProcess,$0008,Token) then
+  try
+    UiAccess:=0; BytesReturned:=0;
+    if KvmWinGetTokenInformation(Token,26,@UiAccess,SizeOf(UiAccess),BytesReturned)
+       and (UiAccess<>0) then Exit(True);
+  finally Windows.CloseHandle(Token); end;
+  // Session 0 is the service context on modern Windows. We cannot check
+  // software-SAS policy here, and SendSAS offers no success indication.
+  SessionId:=High(DWORD);
+  if KvmWinProcessIdToSessionId(Windows.GetCurrentProcessId,SessionId)
+     and (SessionId=0) then
+  begin AsUser:=False; Exit(True); end;
+end;
 function KvmGetIconInfo(Icon: HICON; var Info: Windows.TICONINFO): LongBool;
   stdcall; external 'user32.dll' name 'GetIconInfo';
 function KvmGetObject(Obj: HGDIOBJ; Size: Integer; Data: Pointer): Integer;
@@ -410,7 +444,45 @@ begin
     raise Exception.Create('SendInput rejected (Windows session or permissions).');
 end;
 
-function RequestSecureAttention: Boolean;
+procedure InjectShortcut(const Keys: TKvmShortcutKeys);
+var
+  Inputs: array[0..2*KVM_MAX_SHORTCUT_KEYS-1] of TInput;
+  I,N,Posn: Integer;
+  Flags: DWORD;
+begin
+  N:=Length(Keys);
+  if (N<2) or (N>KVM_MAX_SHORTCUT_KEYS) then
+    raise Exception.Create('Invalid shortcut key count.');
+  FillChar(Inputs,SizeOf(Inputs),0);
+  Posn:=0;
+  // Modifier-down, key-down, key-up, modifier-up are sent atomically:
+  // Windows does not interleave another SendInput call into this array.
+  for I:=0 to N*2-1 do
+  begin
+    if I<N then Posn:=I else Posn:=2*N-1-I;
+    if (Keys[Posn]<1) or (Keys[Posn]>255) then
+      raise Exception.Create('Invalid shortcut virtual key.');
+    Inputs[I]._Type:=INPUT_KEYBOARD;
+    Inputs[I].ki.wVk:=Keys[Posn];
+    Inputs[I].ki.wScan:=Word(MapVirtualKey(Keys[Posn],0));
+    Flags:=0;
+    if Keys[Posn] in [$21..$28,$2d,$2e,$5b,$5c,$5d,$6f,$90,$a3,$a5] then
+      Flags:=KEYEVENTF_EXTENDEDKEY;
+    if I>=N then Flags:=Flags or KEYEVENTF_KEYUP;
+    Inputs[I].ki.dwFlags:=Flags;
+  end;
+  if KvmSendInput(UINT(2*N),@Inputs[0],SizeOf(TInput))<>UINT(2*N) then
+    raise Exception.Create('Windows rejected the shortcut (session or permissions).');
+end;
+
+function RequestRemoteLock: Boolean;
+begin
+  // Only works from a process on the interactive desktop of the user session.
+  // TRUE means initiated, not confirmation that the workstation is now locked.
+  Result:=KvmWinLockWorkStation;
+end;
+
+function RequestSecureAttention: TKvmSasResult;
 type
   TSendSAS = procedure(AsUser: LongBool); stdcall;
 var
@@ -419,6 +491,7 @@ var
   SystemDirectory: array[0..259] of WideChar;
   DirLength: UINT;
   SasPath: WideString;
+  AsUser: LongBool;
 begin
   // SendInput(Ctrl, Alt, Del) is *not* a secure attention sequence.
   // Import dynamically so a missing sas.dll does not prevent server start.
@@ -426,7 +499,8 @@ begin
   // SendSAS returns void: successful invocation does NOT imply Windows
   // accepted the SAS. Windows requires a service or signed uiAccess binary
   // and a suitable local/group policy (SoftwareSASGeneration).
-  Result:=False;
+  Result:=ksrUnavailable;
+  if not KvmWinCanRequestSas(AsUser) then Exit(ksrNeedsPrivileges);
   DirLength:=Windows.GetSystemDirectoryW(@SystemDirectory[0],Length(SystemDirectory));
   if (DirLength=0) or (DirLength>=Length(SystemDirectory)) then Exit;
   SasPath:=WideString(PWideChar(@SystemDirectory[0]))+'\sas.dll';
@@ -435,8 +509,8 @@ begin
   try
     Pointer(SendSASProc):=Windows.GetProcAddress(SasLib,PChar('SendSAS'));
     if not Assigned(SendSASProc) then Exit;
-    SendSASProc(True);
-    Result:=True;
+    SendSASProc(AsUser);
+    Result:=ksrRequested;
   finally
     Windows.FreeLibrary(SasLib);
   end;

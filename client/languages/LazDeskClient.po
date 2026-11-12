@@ -168,11 +168,6 @@ msgstr ""
 msgid "Win+L (lock remote session)"
 msgstr ""
 
-#. Viewer: special.alt_f4
-#: kvm_viewer_i18n.rsviewerspecialaltf4
-msgid "Alt+F4 (close window)"
-msgstr ""
-
 #. Viewer: label.host
 #: kvm_viewer_i18n.rsviewerlabelhost
 msgid "Host / IP"
@@ -406,6 +401,31 @@ msgstr ""
 #. Viewer: status.sas_denied
 #: kvm_viewer_i18n.rsviewerstatussasdenied
 msgid "Ctrl+Alt+Del denied: exclusive control or active desktop required."
+msgstr ""
+
+#. Viewer: status.sas_privileges
+#: kvm_viewer_i18n.rsviewerstatussasprivileges
+msgid "Ctrl+Alt+Del not permitted: the remote host requires a Windows service or signed uiAccess application and SAS policy."
+msgstr ""
+
+#. Viewer: status.lock_requested
+#: kvm_viewer_i18n.rsviewerstatuslockrequested
+msgid "Remote Windows session lock requested."
+msgstr ""
+
+#. Viewer: status.lock_unavailable
+#: kvm_viewer_i18n.rsviewerstatuslockunavailable
+msgid "Lock unavailable: the remote host is not Windows."
+msgstr ""
+
+#. Viewer: status.lock_failed
+#: kvm_viewer_i18n.rsviewerstatuslockfailed
+msgid "Remote Windows session could not be locked (interactive session required)."
+msgstr ""
+
+#. Viewer: status.lock_denied
+#: kvm_viewer_i18n.rsviewerstatuslockdenied
+msgid "Lock denied: exclusive control or active desktop required."
 msgstr ""
 
 #. Viewer: status.input_unsupported

@@ -29,7 +29,7 @@ class ClipboardSourceTests(unittest.TestCase):
         self.assertIn('else if FDecoder<>nil',body)
     def test_new_protocol_consistent(self):
         for p in ('shared/kvm_wire.pas','server/LazDeskServer.lpr'):
-            self.assertIn('lazdesk8',text(p)); self.assertNotIn('lazdesk7',text(p))
+            self.assertIn('lazdesk9',text(p)); self.assertNotIn('lazdesk7',text(p))
     def test_no_private_binary_or_shell_clipboard(self):
         names=list((ROOT/'shared').glob('kvm_clipboard_*.pas'))+list((ROOT/'client').glob('kvm_clipboard_*.pas'))
         for p in names:

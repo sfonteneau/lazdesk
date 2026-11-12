@@ -20,7 +20,9 @@ procedure InjectMouse(Action, Button: Byte; NX, NY: Word);
 procedure InjectText(CodePoint: Cardinal);
 procedure InjectKey(Pressed: Boolean; VKey: Word);
 procedure InjectWheel(Notches: SmallInt);
-function RequestDesktopSecureAttention: Boolean;
+procedure InjectDesktopShortcut(const Keys: TKvmShortcutKeys);
+function RequestDesktopSecureAttention: TKvmSasResult;
+function RequestDesktopLock: TKvmLockResult;
 implementation
 uses SysUtils, kvm_monitors, kvm_session_guard,
   {$IFDEF WINDOWS}Windows, kvm_capture_win, kvm_capture_dxgi, kvm_windows_session, kvm_inject_win;{$ENDIF}
@@ -288,12 +290,38 @@ begin
   {$ENDIF}
   {$IFDEF DARWIN}kvm_inject_mac.InjectKey(Pressed,VKey);{$ENDIF}
 end;
-function RequestDesktopSecureAttention: Boolean;
+procedure InjectDesktopShortcut(const Keys: TKvmShortcutKeys);
+var I,Held: Integer;
 begin
-  // Only Windows has a standard SAS API. Do NOT fake Ctrl+Alt+Del with
-  // ordinary key events on other platforms (nor on Windows).
-  Result:=False;
+  {$IFDEF WINDOWS}
+  kvm_inject_win.InjectShortcut(Keys);
+  {$ELSE}
+  // Non-Windows fallback: preserve key order and always release modifiers.
+  Held:=0;
+  try
+    for I:=0 to High(Keys) do
+    begin
+      Inc(Held);
+      InjectKey(True,Keys[I]);
+    end;
+  finally
+    for I:=Held-1 downto 0 do InjectKey(False,Keys[I]);
+  end;
+  {$ENDIF}
+end;
+function RequestDesktopSecureAttention: TKvmSasResult;
+begin
+  // Windows SAS is privileged; no simulated Ctrl+Alt+Del fallback.
+  Result:=ksrUnavailable;
   {$IFDEF WINDOWS}Result:=kvm_inject_win.RequestSecureAttention;{$ENDIF}
+end;
+function RequestDesktopLock: TKvmLockResult;
+begin
+  Result:=klrUnavailable;
+  {$IFDEF WINDOWS}
+  if kvm_inject_win.RequestRemoteLock then Result:=klrRequested
+  else Result:=klrFailed;
+  {$ENDIF}
 end;
 procedure InjectWheel(Notches: SmallInt);
 begin

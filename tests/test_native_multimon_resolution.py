@@ -54,6 +54,6 @@ class NativeMultimonTests(unittest.TestCase):
         wire=text('shared/kvm_wire.pas')
         self.assertIn('W <= KVM_MAX_FRAME_SIDE',wire)
         self.assertIn('Int64(W) * H <= KVM_MAX_FRAME_PIXELS',wire)
-        self.assertIn("KVM_SUBPROTOCOL = 'lazdesk8'",wire)
+        self.assertIn("KVM_SUBPROTOCOL = 'lazdesk9'",wire)
 
 if __name__=='__main__': unittest.main()

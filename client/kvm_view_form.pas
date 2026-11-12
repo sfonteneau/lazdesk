@@ -215,7 +215,6 @@ const
   KVM_SPECIAL_EXPLORER = 8;
   KVM_SPECIAL_DESKTOP = 9;
   KVM_SPECIAL_LOCK = 10;
-  KVM_SPECIAL_ALT_F4 = 11;
   {$IFDEF WINDOWS}
   // Local pointer mirrors the exact native cursor shape selected by the remote app.
   KVM_LOCAL_NATIVE_CURSOR: TCursor = 1001;
@@ -390,7 +389,6 @@ begin
   AddSpecialKeyItem('Win+E (Explorer)',KVM_SPECIAL_EXPLORER);
   AddSpecialKeyItem('Win+D (desktop)',KVM_SPECIAL_DESKTOP);
   AddSpecialKeyItem('Win+L (lock remote session)',KVM_SPECIAL_LOCK);
-  AddSpecialKeyItem('Alt+F4 (close window)',KVM_SPECIAL_ALT_F4);
   Sep:=TMenuItem.Create(FMainMenu); Sep.Caption:='-'; FControlMenu.Add(Sep);
   FMenuClipboard:=TMenuItem.Create(FMainMenu);
   FMenuClipboard.Caption:='Clipboard'; FControlMenu.Add(FMenuClipboard);
@@ -875,7 +873,7 @@ end;
 
 procedure TKvmViewForm.SpecialKeyClick(Sender: TObject);
 var
-  Shortcut, Count, I: Integer;
+  Shortcut, Count: Integer;
   Keys: array[0..2] of Word;
 begin
   // Menu clicks do not require the remote paint box to have keyboard focus.
@@ -906,16 +904,24 @@ begin
         if MessageDlg(rsViewerDialogLockWarning,mtConfirmation,
           [mbYes,mbNo],0)<>mrYes then Exit;
         if not ControlAllowed then Exit;
-        Keys[0]:=$5b; Keys[1]:=Ord('L'); Count:=2;
+        // Win+L is protected by Windows and is not a reliable SendInput
+        // shortcut. Ask the host process to call LockWorkStation instead.
+        SendPacket('J');
+        Exit;
       end;
-    KVM_SPECIAL_ALT_F4: begin Keys[0]:=$12; Keys[1]:=$73; Count:=2; end;
   else Exit;
   end;
 
-  // The input queue preserves ordering. Release in reverse order so no
-  // modifier remains down after sending one of these shortcuts.
-  for I:=0 to Count-1 do SendPacket(MakeKey(True,Keys[I]));
-  for I:=Count-1 downto 0 do SendPacket(MakeKey(False,Keys[I]));
+  if Count=1 then
+  begin
+    // Keep the existing working F11 / Windows-key behavior unchanged.
+    SendPacket(MakeKey(True,Keys[0]));
+    SendPacket(MakeKey(False,Keys[0]));
+  end
+  else if Count>1 then
+    // One packet -> one SendInput call on Windows. Individual key packets
+    // could interleave with other input and lose Ctrl+Esc / Alt+Tab.
+    SendPacket(MakeShortcut(Slice(Keys,Count)));
 end;
 
 procedure TKvmViewForm.ClipboardMenuClick(Sender: TObject);
@@ -998,7 +1004,6 @@ begin
       KVM_SPECIAL_EXPLORER: Item.Caption:=rsViewerSpecialExplorer;
       KVM_SPECIAL_DESKTOP: Item.Caption:=rsViewerSpecialDesktop;
       KVM_SPECIAL_LOCK: Item.Caption:=rsViewerSpecialLock;
-      KVM_SPECIAL_ALT_F4: Item.Caption:=rsViewerSpecialAltF4;
     end;
   end;
   FMenuClipboard.Caption:=rsViewerMenuClipboard;
@@ -2137,6 +2142,16 @@ begin
       SetStatus(rsViewerStatusSasUnavailable)
     else if TextMsg = 'SAS DENIED' then
       SetStatus(rsViewerStatusSasDenied)
+    else if TextMsg = 'SAS PRIVILEGES' then
+      SetStatus(rsViewerStatusSasPrivileges)
+    else if TextMsg = 'LOCK REQUESTED' then
+      SetStatus(rsViewerStatusLockRequested)
+    else if TextMsg = 'LOCK UNAVAILABLE' then
+      SetStatus(rsViewerStatusLockUnavailable)
+    else if TextMsg = 'LOCK FAILED' then
+      SetStatus(rsViewerStatusLockFailed)
+    else if TextMsg = 'LOCK DENIED' then
+      SetStatus(rsViewerStatusLockDenied)
     else if TextMsg = 'ERR INPUT' then
       SetStatus(rsViewerStatusInputUnsupported)
     else if (TextMsg = 'ERR AUTH') or (TextMsg = 'ERR LIMIT') or
@@ -2382,15 +2397,17 @@ var
   Pressed: Boolean;
   Wheel: SmallInt;
   Points: TKvmCodePoints;
+  Keys: TKvmShortcutKeys;
 begin
   Result:=False;
   if Payload='' then Exit;
   case Payload[1] of
-    'P','R','G','L','Z','Q': Result:=Length(Payload)=1;
+    'P','R','G','L','Z','Q','J': Result:=Length(Payload)=1;
     'A': Result:=ReadBatchAck(Payload,Serial);
     'N': Result:=ReadBatchNack(Payload,Serial);
     'M': Result:=ReadMouse(Payload,MouseAction,Button,MX,MY);
     'K': Result:=ReadKey(Payload,Pressed,VKey);
+    'Y': Result:=ReadShortcut(Payload,Keys);
     'W': Result:=ReadWheel(Payload,Wheel);
     // Only versioned X requests may leave the local input queue.
     'X': Result:=ReadTextRequest(Payload,Serial,Points);
@@ -2438,7 +2455,7 @@ end;
 procedure TKvmViewForm.SendPacket(const Payload: RawByteString);
 begin
   if (Payload='') or not FAuthorized or FTransportFault then Exit;
-  if Payload[1] in ['K','M','W','U','Q'] then
+  if Payload[1] in ['K','M','W','U','Q','J','Y'] then
   begin
     if not ControlAllowed then Exit;
     if not FInputs.Push(Payload) then
