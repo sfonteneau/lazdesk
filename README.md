@@ -46,6 +46,37 @@ See [VIEWER_EMBEDDING.md](VIEWER_EMBEDDING.md),
 `examples/viewer_separate_window.pas`, and
 `examples/viewer_in_existing_form.pas`.
 
+## Remote monitor fusion and detached windows
+
+The **View > Monitors** menu continues to show all selected remote monitors
+in a merged window by default (including the existing local-monitor spanning
+behavior). The new **View > Monitors > Fusion** submenu contains a checked item
+for each remote monitor still in the merged view:
+
+- **Uncheck a monitor** to detach it into a separate native, resizable window.
+  Move that window onto any local display; its remote image is fitted to the
+  window's client area, including optional enlargement on 4K displays.
+- **Check it again**, or **close the detached window**, to merge it back into
+  the main viewer without disconnecting the session.
+- Monitor visibility remains controlled by the existing monitor selection
+  entries. Hidden detached monitors do not open a window until selected again.
+- **F11** toggles fullscreen only for the currently focused monitor window;
+  the original main window retains its existing fullscreen behavior.
+- When all monitors are detached, the main viewer remains available for session
+  menus and shows a short explanatory message.
+
+All windows reuse **one WebSocket connection, decoder, presentation surface and
+input queue**. Remote input and cursor coordinates are mapped through each
+window's source/destination rectangle; an active drag can cross between viewer
+windows. The session releases held keys on focus loss to a different
+application, not when switching between LazDesk windows.
+
+**Limitations:** Embedded in-form viewers keep a single merged surface because
+window placement belongs to the embedding host. The detached-window mode does
+not change Windows DPI awareness, the remote desktop resolution, or JPEG image
+quality: enlarging 1080p to 4K is still an interpolation. Mixed-DPI Windows
+setups require native validation with the LCL/manifest configuration in use.
+
 ## Building
 
 Requirements: **Free Pascal / Lazarus**, **mORMot2**, **TurboJPEG**, and platform-specific build tools. On Windows, you also need **MinGW-w64** and **Python 3**.

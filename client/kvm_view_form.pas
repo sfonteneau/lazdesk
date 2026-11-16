@@ -33,13 +33,15 @@ type
   TKvmDisplayItems = array of TKvmDisplayItem;
   TKvmIntegerArray = array of Integer;
 
+  TKvmDetachedMonitorForm = class;
+
   TKvmViewForm = class(TForm)
   private
     FTop: TPanel; // Parent cache invisible pour l'etat des controles internes.
     FMainMenu: TMainMenu;
     FFileMenu, FViewMenu, FControlMenu: TMenuItem;
     FMenuConnectionSettings, FMenuConnect, FMenuDisconnect, FMenuQuit: TMenuItem;
-    FMenuMonitors, FMenuFullscreen, FMenuRefresh: TMenuItem;
+    FMenuMonitors, FMenuFusion, FMenuFullscreen, FMenuRefresh: TMenuItem;
     FMenuControl, FMenuKeyboardMode, FMenuUnicodeKeys, FMenuRemoteKeys, FMenuText: TMenuItem;
     FMenuSpecialKeys: TMenuItem;
     FMenuLanguage, FMenuLanguageEN, FMenuLanguageFR: TMenuItem;
@@ -92,6 +94,10 @@ type
     FRemoteLayoutW, FRemoteLayoutH: Integer;
     FRemoteMonitors: TKvmRemoteMonitors;
     FRemoteMonitorSelected: array of Boolean;
+    FRemoteMonitorDetached: array of Boolean;
+    FDetachedWindows: array of TKvmDetachedMonitorForm;
+    FDeactivationPending: Boolean;
+    FDeactivationTick: QWord;
     FPreferMaximized, FFullScreenMode, FSpanningMonitors: Boolean;
     FRestoreBounds: TRect;
     FRestoreWindowState: TWindowState;
@@ -114,6 +120,17 @@ type
     function SessionStateDescription(Reason: Byte): string;
     procedure ClipboardMenuClick(Sender: TObject);
     procedure MonitorMenuClick(Sender: TObject);
+    procedure FusionMenuClick(Sender: TObject);
+    procedure SyncDetachedWindows;
+    procedure FreeDetachedWindows;
+    procedure DetachedWindowClosed(Detached: TKvmDetachedMonitorForm);
+    procedure InvalidateAllViews;
+    function MonitorForView(AView: TPaintBox): Integer;
+    function SessionWindowActive: Boolean;
+    procedure SessionWindowActivated(Sender: TObject);
+    procedure ReleaseSessionCapture;
+    procedure ResolveDragView(var AView: TPaintBox; var X,Y: Integer);
+    procedure ReleaseInputsOnFocusLoss;
     procedure FullScreenMenuClick(Sender: TObject);
     procedure QuitClick(Sender: TObject);
     procedure ToggleFullScreen;
@@ -126,12 +143,14 @@ type
     procedure UpdateMonitorSummary;
     procedure ParseMonitorLayout(const TextMsg: string);
     function SelectedRemoteMonitorCount: Integer;
+    function FusedRemoteMonitorCount: Integer;
     procedure GetOrderedLocalMonitors(out Indices: TKvmIntegerArray);
     function LocalMonitorWorkRect(Index: Integer): TRect;
     function GetLocalSpanRect(const Indices: TKvmIntegerArray; Count: Integer;
       AFullScreen: Boolean; out SpanRect: TRect): Boolean;
-    function BuildDisplayLayout(out Items: TKvmDisplayItems): Boolean;
-    function MapRemoteCursorToView(NX,NY: Word; out CX,CY: Integer; out Item: TKvmDisplayItem): Boolean;
+    function BuildDisplayLayoutFor(AView: TPaintBox; out Items: TKvmDisplayItems): Boolean;
+    function MapRemoteCursorToView(AView: TPaintBox; NX,NY: Word;
+      out CX,CY: Integer; out Item: TKvmDisplayItem): Boolean;
     procedure DisconnectClick(Sender: TObject);
     procedure ControlClick(Sender: TObject);
     procedure TryAutoRequestControl;
@@ -148,11 +167,13 @@ type
     procedure DecodeReply(const Payload: RawByteString);
     procedure PresentSnapshot(const Snapshot: TKvmPresentation);
     procedure InvalidateCursor(X,Y: Word; AVisible: Boolean);
+    procedure InvalidateCursorInView(AView: TPaintBox; X,Y: Word; AVisible: Boolean);
     procedure SyncViewCursor;
     procedure RecordLocalMouseEcho(X,Y: Word);
     function CursorMoveWasLocalEcho(X,Y: Word; NowTick: QWord): Boolean;
     procedure HideRemoteCursorOverlay;
     procedure InvalidateDamage(const Damage: TRect);
+    procedure InvalidateDamageInView(AView: TPaintBox; const Damage: TRect);
     procedure IncomingFrame(Sender: TWebSocketProcess;
       const Frame: TWebSocketFrame);
     procedure PollTimer(Sender: TObject);
@@ -171,8 +192,8 @@ type
 
     procedure SendPacket(const Payload: RawByteString);
     function ControlAllowed: Boolean;
-    function GetVideoRect: TRect;
-    function ToNormalized(X, Y: Integer; out NX, NY: Word): Boolean;
+    function GetVideoRect(AView: TPaintBox): TRect;
+    function ToNormalized(AView: TPaintBox; X, Y: Integer; out NX, NY: Word): Boolean;
     function MouseButtonCode(Button: TMouseButton): Byte;
     procedure SetStatus(const TextA: string);
     procedure CloseSocket;
@@ -197,11 +218,33 @@ type
     destructor Destroy; override;
   end;
 
+  // A lightweight native window. The owner session remains the only socket,
+  // decoder, framebuffer, and input queue for all local monitor windows.
+  TKvmDetachedMonitorForm = class(TForm)
+  private
+    FSession: TKvmViewForm;
+    FMonitorIndex: Integer;
+    FView: TPaintBox;
+    FFullScreen: Boolean;
+    FRestoreRect: TRect;
+    FRestoreState: TWindowState;
+    procedure WindowClosing(Sender: TObject; var CloseAction: TCloseAction);
+  public
+    constructor CreateMonitor(ASession: TKvmViewForm; AIndex: Integer);
+    procedure ToggleFullScreen;
+    procedure RefreshCaption;
+    property MonitorIndex: Integer read FMonitorIndex;
+    property View: TPaintBox read FView;
+  end;
+
 implementation
 
 const
   // 12 ms cap: mouse moves are coalesced by the UI instead of discarded.
   KVM_MOUSE_INTERVAL_MS = 12;
+  // Let Windows complete the activation of the next window before releasing
+  // held remote inputs. Switching between LazDesk windows is not focus loss.
+  KVM_FOCUS_GRACE_MS = 60;
   KVM_MOUSE_ECHO_WINDOW_MS = 800;
   KVM_MOUSE_ECHO_TOLERANCE = 64;
   // IDs are assigned to the native Control -> Send special keys menu items.
@@ -246,6 +289,106 @@ begin
   {$ENDIF}
 end;
 
+constructor TKvmDetachedMonitorForm.CreateMonitor(ASession: TKvmViewForm;
+  AIndex: Integer);
+var
+  R: TRect;
+  LocalIndex, W, H: Integer;
+begin
+  inherited CreateNew(ASession,1);
+  FSession:=ASession;
+  FMonitorIndex:=AIndex;
+  Color:=clBlack;
+  KeyPreview:=True;
+  OnClose:=@WindowClosing;
+  OnActivate:=@ASession.SessionWindowActivated;
+  OnDeactivate:=@ASession.WindowDeactivated;
+  OnKeyDown:=@ASession.RemoteKeyDown;
+  OnKeyUp:=@ASession.RemoteKeyUp;
+  OnUTF8KeyPress:=@ASession.RemoteUTF8KeyPress;
+  FView:=TPaintBox.Create(Self);
+  FView.Parent:=Self;
+  FView.Align:=alClient;
+  FView.OnPaint:=@ASession.PaintView;
+  FView.OnMouseMove:=@ASession.ViewMouseMove;
+  FView.OnMouseDown:=@ASession.ViewMouseDown;
+  FView.OnMouseUp:=@ASession.ViewMouseUp;
+  FView.OnMouseWheel:=@ASession.ViewMouseWheel;
+  RefreshCaption;
+
+  Position:=poDesigned;
+  if (Screen<>nil) and (Screen.MonitorCount>0) then
+  begin
+    // Start near the corresponding local display; the user is free to move it.
+    LocalIndex:=AIndex mod Screen.MonitorCount;
+    R:=ASession.LocalMonitorWorkRect(LocalIndex);
+    W:=Min(1000,Max(320,R.Right-R.Left-80));
+    H:=Min(700,Max(240,R.Bottom-R.Top-80));
+    SetBounds(R.Left+(R.Right-R.Left-W) div 2,
+      R.Top+(R.Bottom-R.Top-H) div 2,W,H);
+  end
+  else SetBounds(100,100,900,600);
+end;
+
+procedure TKvmDetachedMonitorForm.RefreshCaption;
+begin
+  if (FSession=nil) or (FMonitorIndex<0) or
+     (FMonitorIndex>=Length(FSession.FRemoteMonitors)) then Exit;
+  Caption:='LazDesk - '+Format(rsViewerMonitorItem,
+    [FMonitorIndex+1,FSession.FRemoteMonitors[FMonitorIndex].W,
+     FSession.FRemoteMonitors[FMonitorIndex].H]);
+end;
+
+procedure TKvmDetachedMonitorForm.ToggleFullScreen;
+var
+  I, CX, CY, LocalIndex: Integer;
+  R: TRect;
+begin
+  if not FFullScreen then
+  begin
+    FRestoreRect:=BoundsRect;
+    FRestoreState:=WindowState;
+    LocalIndex:=0;
+    CX:=Left+Width div 2;
+    CY:=Top+Height div 2;
+    if Screen<>nil then
+      for I:=0 to Screen.MonitorCount-1 do
+      begin
+        R:=Screen.Monitors[I].BoundsRect;
+        if (CX>=R.Left) and (CX<R.Right) and
+           (CY>=R.Top) and (CY<R.Bottom) then
+        begin LocalIndex:=I; Break; end;
+      end;
+    if (Screen=nil) or (Screen.MonitorCount=0) then Exit;
+    R:=Screen.Monitors[LocalIndex].BoundsRect;
+    WindowState:=wsNormal;
+    BorderStyle:=bsNone;
+    Position:=poDesigned;
+    SetBounds(R.Left,R.Top,R.Right-R.Left,R.Bottom-R.Top);
+    FFullScreen:=True;
+  end
+  else
+  begin
+    WindowState:=wsNormal;
+    BorderStyle:=bsSizeable;
+    Position:=poDesigned;
+    SetBounds(FRestoreRect.Left,FRestoreRect.Top,
+      FRestoreRect.Right-FRestoreRect.Left,
+      FRestoreRect.Bottom-FRestoreRect.Top);
+    WindowState:=FRestoreState;
+    FFullScreen:=False;
+  end;
+  FView.Invalidate;
+end;
+
+procedure TKvmDetachedMonitorForm.WindowClosing(Sender: TObject;
+  var CloseAction: TCloseAction);
+begin
+  // Closing a detached monitor reattaches it. It never closes the session.
+  CloseAction:=caFree;
+  if FSession<>nil then FSession.DetachedWindowClosed(Self);
+end;
+
 constructor TKvmViewForm.Create(AOwner: TComponent);
 var
   L: TLabel;
@@ -274,6 +417,7 @@ begin
   OnKeyDown := @RemoteKeyDown;
   OnKeyUp := @RemoteKeyUp;
   OnDeactivate := @WindowDeactivated;
+  OnActivate := @SessionWindowActivated;
   OnResize := @WindowResized;
 
   FBitmap := TBitmap.Create;
@@ -294,6 +438,7 @@ begin
   FRemoteCursorOverlay := False;
   FRemoteLayoutW := 0; FRemoteLayoutH := 0;
   SetLength(FRemoteMonitors,0); SetLength(FRemoteMonitorSelected,0);
+  SetLength(FRemoteMonitorDetached,0); SetLength(FDetachedWindows,0);
   FPreferMaximized := False;
   FFullScreenMode := False;
   FSpanningMonitors := False;
@@ -531,6 +676,7 @@ begin
   if FSocket <> nil then
     raise Exception.Create('EnableEmbeddedMode must be called before connecting.');
   if FEmbeddedMode then Exit;
+  FreeDetachedWindows;
   FEmbeddedMode := True;
   FAutoConnect := False;
   FPreferMaximized := False;
@@ -570,7 +716,7 @@ end;
 
 procedure TKvmViewForm.ReleaseLocalInputs;
 begin
-  if not FClosing then WindowDeactivated(nil);
+  if not FClosing then ReleaseInputsOnFocusLoss;
 end;
 
 function TKvmViewForm.Connected: Boolean;
@@ -641,6 +787,7 @@ destructor TKvmViewForm.Destroy;
 begin
   FClosing := True;
   if FTimer<>nil then FTimer.Enabled:=False;
+  FreeDetachedWindows;
   if FView<>nil then CloseSocket
   else begin StopClipboardWorker; StopVideoWorker; FreeAndNil(FSocket); end;
   {$IFDEF WINDOWS}FWinPresenter.Free;{$ENDIF}
@@ -672,6 +819,172 @@ begin
   LayoutOverlay;
 end;
 
+function TKvmViewForm.FusedRemoteMonitorCount: Integer;
+var I: Integer;
+begin
+  Result:=0;
+  for I:=0 to High(FRemoteMonitorSelected) do
+  begin
+    if not FRemoteMonitorSelected[I] then Continue;
+    if I>=Length(FRemoteMonitorDetached) then Inc(Result)
+    else if not FRemoteMonitorDetached[I] then Inc(Result);
+  end;
+end;
+
+function TKvmViewForm.MonitorForView(AView: TPaintBox): Integer;
+var I: Integer;
+begin
+  Result:=-1; // the main view shows every selected, still-fused monitor
+  if AView=FView then Exit;
+  for I:=0 to High(FDetachedWindows) do
+    if (FDetachedWindows[I]<>nil) and (FDetachedWindows[I].View=AView) then
+      Exit(I);
+  Result:=-2; // unknown / destroyed view
+end;
+
+procedure TKvmViewForm.FreeDetachedWindows;
+var I: Integer;
+begin
+  for I:=0 to High(FDetachedWindows) do
+    if FDetachedWindows[I]<>nil then
+    begin
+      if GetCaptureControl=FDetachedWindows[I].View then SetCaptureControl(nil);
+      FreeAndNil(FDetachedWindows[I]);
+    end;
+  SetLength(FDetachedWindows,0);
+end;
+
+procedure TKvmViewForm.SyncDetachedWindows;
+var I: Integer; WantWindow: Boolean;
+begin
+  if Length(FDetachedWindows)<>Length(FRemoteMonitors) then
+  begin
+    FreeDetachedWindows;
+    SetLength(FDetachedWindows,Length(FRemoteMonitors));
+  end;
+  for I:=0 to High(FRemoteMonitors) do
+  begin
+    WantWindow:=not FClosing and not FEmbeddedMode and FAuthorized and
+      FRemoteMonitorSelected[I] and FRemoteMonitorDetached[I];
+    if not WantWindow and (FDetachedWindows[I]<>nil) then
+      FreeAndNil(FDetachedWindows[I])
+    else if WantWindow and (FDetachedWindows[I]=nil) then
+    begin
+      try
+        FDetachedWindows[I]:=TKvmDetachedMonitorForm.CreateMonitor(Self,I);
+        FDetachedWindows[I].Show;
+      except
+        on E: Exception do
+        begin
+          // A failed native window must not make a remote monitor disappear.
+          FreeAndNil(FDetachedWindows[I]);
+          FRemoteMonitorDetached[I]:=False;
+          KvmClientLog('[client-layout] unable to detach monitor '+
+            IntToStr(I+1)+': '+E.Message);
+        end;
+      end;
+    end
+    else if WantWindow then FDetachedWindows[I].RefreshCaption;
+  end;
+  SyncViewCursor;
+end;
+
+procedure TKvmViewForm.DetachedWindowClosed(Detached: TKvmDetachedMonitorForm);
+var I: Integer;
+begin
+  if FClosing then Exit;
+  I:=Detached.MonitorIndex;
+  if (I<0) or (I>=Length(FDetachedWindows)) or
+     (FDetachedWindows[I]<>Detached) then Exit;
+  // LCL owns the pending caFree; never free the form inside its OnClose.
+  // Window shutdown can drop Win32 capture before OnClose reaches us.
+  if FMouseButtons<>0 then ReleaseInputsOnFocusLoss;
+  if GetCaptureControl=Detached.View then SetCaptureControl(nil);
+  FDetachedWindows[I]:=nil;
+  FRemoteMonitorDetached[I]:=False;
+  HideRemoteCursorOverlay;
+  UpdateMonitorSummary;
+  ApplyMonitorLayout;
+  InvalidateAllViews;
+end;
+
+procedure TKvmViewForm.InvalidateAllViews;
+var I: Integer;
+begin
+  if FView<>nil then FView.Invalidate;
+  for I:=0 to High(FDetachedWindows) do
+    if FDetachedWindows[I]<>nil then FDetachedWindows[I].View.Invalidate;
+end;
+
+function TKvmViewForm.SessionWindowActive: Boolean;
+var I: Integer; ActiveWindow: TCustomForm;
+begin
+  Result:=False;
+  if Screen=nil then Exit;
+  ActiveWindow:=Screen.ActiveCustomForm;
+  if ActiveWindow=Self then Exit(True);
+  for I:=0 to High(FDetachedWindows) do
+    if (FDetachedWindows[I]<>nil) and (ActiveWindow=FDetachedWindows[I]) then
+      Exit(True);
+end;
+
+procedure TKvmViewForm.SessionWindowActivated(Sender: TObject);
+begin
+  FDeactivationPending:=False;
+end;
+
+procedure TKvmViewForm.ReleaseSessionCapture;
+var I: Integer; Captured: TControl;
+begin
+  Captured:=GetCaptureControl;
+  if Captured=FView then begin SetCaptureControl(nil); Exit; end;
+  for I:=0 to High(FDetachedWindows) do
+    if (FDetachedWindows[I]<>nil) and
+       (Captured=FDetachedWindows[I].View) then
+    begin SetCaptureControl(nil); Exit; end;
+end;
+
+procedure TKvmViewForm.ResolveDragView(var AView: TPaintBox;
+  var X,Y: Integer);
+var
+  P, Local: TPoint;
+  I: Integer;
+  Candidate: TPaintBox;
+  procedure TryView(View: TPaintBox);
+  begin
+    if (View=nil) or not View.Visible then Exit;
+    Local:=View.ScreenToClient(P);
+    if (Local.X>=0) and (Local.Y>=0) and
+       (Local.X<View.Width) and (Local.Y<View.Height) then
+    begin
+      AView:=View;
+      X:=Local.X; Y:=Local.Y;
+    end;
+  end;
+begin
+  if (FMouseButtons=0) or (AView=nil) then Exit;
+  P:=AView.ClientToScreen(Point(X,Y));
+  // The original captured view gets the mouse-up even when the user moved
+  // over a second detached window. Re-target only while actually over it.
+  for I:=0 to High(FDetachedWindows) do
+    if FDetachedWindows[I]<>nil then
+    begin
+      Candidate:=FDetachedWindows[I].View;
+      if Candidate<>AView then TryView(Candidate);
+      if AView=Candidate then Exit;
+    end;
+  if AView<>FView then TryView(FView);
+end;
+
+procedure TKvmViewForm.ReleaseInputsOnFocusLoss;
+begin
+  FDeactivationPending:=False;
+  ReleaseSessionCapture;
+  // No other LazDesk window is active: release remote keys and mouse buttons.
+  if FAuthorized and FControlGranted then SendPacket('Z');
+  ResetLocalInputs;
+end;
+
 function TKvmViewForm.SelectedRemoteMonitorCount: Integer;
 var I: Integer;
 begin
@@ -688,7 +1001,8 @@ end;
 
 procedure TKvmViewForm.ParseMonitorLayout(const TextMsg: string);
 var
-  Parts: TStringList; Temp: TKvmRemoteMonitors; OldSelected: array of Boolean;
+  Parts: TStringList; Temp: TKvmRemoteMonitors;
+  OldSelected,OldDetached: array of Boolean;
   Count,BasisW,BasisH,I,At,X,Y,W,H: Integer; Preserve: Boolean;
 begin
   Parts:=TStringList.Create;
@@ -711,18 +1025,38 @@ begin
       Temp[I].X:=X; Temp[I].Y:=Y; Temp[I].W:=W; Temp[I].H:=H;
     end;
     Preserve:=Length(FRemoteMonitorSelected)=Count;
-    if Preserve then OldSelected:=Copy(FRemoteMonitorSelected,0,Count);
+    if Preserve then
+    begin
+      OldSelected:=Copy(FRemoteMonitorSelected,0,Count);
+      OldDetached:=Copy(FRemoteMonitorDetached,0,Count);
+    end;
+    // Changing topology invalidates old per-monitor window indices.
+    if (Length(FDetachedWindows)<>Count) and (FMouseButtons<>0) then
+      ReleaseInputsOnFocusLoss;
+    if Length(FDetachedWindows)<>Count then FreeDetachedWindows;
     FRemoteMonitors:=Temp; FRemoteLayoutW:=BasisW; FRemoteLayoutH:=BasisH;
     SetLength(FRemoteMonitorSelected,Count);
+    SetLength(FRemoteMonitorDetached,Count);
     for I:=0 to Count-1 do
-      if Preserve then FRemoteMonitorSelected[I]:=OldSelected[I]
-      else FRemoteMonitorSelected[I]:=True;
+    begin
+      if Preserve then
+      begin
+        FRemoteMonitorSelected[I]:=OldSelected[I];
+        FRemoteMonitorDetached[I]:=OldDetached[I];
+      end
+      else
+      begin
+        FRemoteMonitorSelected[I]:=True;
+        FRemoteMonitorDetached[I]:=False;
+      end;
+    end;
     if SelectedRemoteMonitorCount=0 then
       for I:=0 to Count-1 do FRemoteMonitorSelected[I]:=True;
     RebuildMonitorMenu;
     UpdateMonitorSummary;
+    SyncDetachedWindows;
     ApplyMonitorLayout;
-    FView.Invalidate;
+    InvalidateAllViews;
   finally
     Parts.Free;
   end;
@@ -734,6 +1068,7 @@ var
   I: Integer;
 begin
   if FMenuMonitors=nil then Exit;
+  FMenuFusion:=nil; // any previous submenu is freed below
   while FMenuMonitors.Count>0 do FMenuMonitors.Items[0].Free;
   if Length(FRemoteMonitors)=0 then
   begin
@@ -759,6 +1094,19 @@ begin
     Item.Tag:=I; Item.OnClick:=@MonitorMenuClick;
     FMenuMonitors.Add(Item);
   end;
+  Sep:=TMenuItem.Create(FMainMenu); Sep.Caption:='-';
+  FMenuMonitors.Add(Sep);
+  FMenuFusion:=TMenuItem.Create(FMainMenu);
+  FMenuFusion.Caption:=rsViewerMenuFusion;
+  FMenuMonitors.Add(FMenuFusion);
+  for I:=0 to High(FRemoteMonitors) do
+  begin
+    Item:=TMenuItem.Create(FMainMenu);
+    Item.Caption:=Format(rsViewerMonitorItem,
+      [I+1,FRemoteMonitors[I].W,FRemoteMonitors[I].H]);
+    Item.Tag:=I; Item.OnClick:=@FusionMenuClick;
+    FMenuFusion.Add(Item);
+  end;
   SyncMonitorMenu;
 end;
 
@@ -773,12 +1121,39 @@ begin
   for I:=0 to FMenuMonitors.Count-1 do
   begin
     Item:=FMenuMonitors.Items[I];
-    if Item.Caption='-' then Continue;
+    if (Item.Caption='-') or (Item=FMenuFusion) then Continue;
     Index:=Item.Tag;
     if Index=-1 then Item.Checked:=AllSelected
     else if (Index>=0) and (Index<Length(FRemoteMonitorSelected)) then
       Item.Checked:=FRemoteMonitorSelected[Index];
   end;
+  if FMenuFusion<>nil then
+  begin
+    FMenuFusion.Enabled:=FAuthorized and not FEmbeddedMode and
+      (Length(FRemoteMonitors)>0);
+    for I:=0 to FMenuFusion.Count-1 do
+    begin
+      Item:=FMenuFusion.Items[I];
+      Item.Enabled:=(I<Length(FRemoteMonitorSelected)) and FRemoteMonitorSelected[I];
+      Item.Checked:=(I<Length(FRemoteMonitorDetached)) and not FRemoteMonitorDetached[I];
+    end;
+  end;
+end;
+
+procedure TKvmViewForm.FusionMenuClick(Sender: TObject);
+var I: Integer;
+begin
+  if not (Sender is TMenuItem) or not FAuthorized or FEmbeddedMode then Exit;
+  I:=TMenuItem(Sender).Tag;
+  if (I<0) or (I>=Length(FRemoteMonitorDetached)) or
+     not FRemoteMonitorSelected[I] then Exit;
+  if FMouseButtons<>0 then ReleaseInputsOnFocusLoss;
+  FRemoteMonitorDetached[I]:=not FRemoteMonitorDetached[I];
+  HideRemoteCursorOverlay;
+  SyncDetachedWindows;
+  UpdateMonitorSummary;
+  ApplyMonitorLayout;
+  InvalidateAllViews;
 end;
 
 procedure TKvmViewForm.MonitorMenuClick(Sender: TObject);
@@ -802,10 +1177,12 @@ begin
     FRemoteMonitorSelected[Index]:=not FRemoteMonitorSelected[Index];
   end
   else Exit;
+  if FMouseButtons<>0 then ReleaseInputsOnFocusLoss;
   HideRemoteCursorOverlay;
+  SyncDetachedWindows;
   SyncMonitorMenu;
   ApplyMonitorLayout;
-  if FView<>nil then FView.Invalidate;
+  InvalidateAllViews;
 end;
 
 procedure TKvmViewForm.ToggleFullScreen;
@@ -1026,6 +1403,8 @@ begin
   FClipFromRemote.Hint:=rsViewerHintClipboardFrom;
   FLabelClipboardHelp.Caption:=rsViewerLabelClipboardHelp;
   RebuildMonitorMenu;
+  for I:=0 to High(FDetachedWindows) do
+    if FDetachedWindows[I]<>nil then FDetachedWindows[I].RefreshCaption;
 end;
 
 procedure TKvmViewForm.SyncMainMenu;
@@ -1206,7 +1585,7 @@ begin
     SyncMainMenu;
     Exit;
   end;
-  SelectedCount:=SelectedRemoteMonitorCount;
+  SelectedCount:=FusedRemoteMonitorCount;
 
   // Multi-monitor display is independent from fullscreen. With two or more
   // selected remote monitors, span the corresponding local work areas while
@@ -1281,7 +1660,8 @@ begin
       begin
         SelectedIndex:=-1;
         for J:=0 to High(FRemoteMonitorSelected) do
-          if FRemoteMonitorSelected[J] then begin SelectedIndex:=J; Break; end;
+          if FRemoteMonitorSelected[J] and not FRemoteMonitorDetached[J] then
+          begin SelectedIndex:=J; Break; end;
         if SelectedIndex>=0 then
         begin
           if SurfaceValid(FFront.Surface) and (FRemoteLayoutW>0) and (FRemoteLayoutH>0) then
@@ -1316,12 +1696,14 @@ begin
   SyncMainMenu;
 end;
 
-function TKvmViewForm.BuildDisplayLayout(out Items: TKvmDisplayItems): Boolean;
+function TKvmViewForm.BuildDisplayLayoutFor(AView: TPaintBox;
+  out Items: TKvmDisplayItems): Boolean;
 var
   Selected: TKvmIntegerArray; LocalOrder: TKvmIntegerArray;
   I,N,SrcW,SrcH,SlotW,SlotH,DestW,DestH: Integer;
   Src,Slot,Bounds,LocalBounds,RawSlot: TRect; Scale: Double; First: Boolean;
   ViewOrigin: TPoint;
+  RemoteOnly: Integer;
   function SourceForRemote(Index: Integer): TRect;
   var M: TKvmRemoteMonitor;
   begin
@@ -1337,22 +1719,46 @@ var
   end;
 begin
   Result:=False; SetLength(Items,0);
-  if not SurfaceValid(FFront.Surface) or (FView.Width<1) or (FView.Height<1) then Exit;
+  if AView=nil then Exit;
+  RemoteOnly:=MonitorForView(AView);
+  if RemoteOnly=-2 then Exit;
+  if not SurfaceValid(FFront.Surface) or (AView.Width<1) or (AView.Height<1) then Exit;
   if (Length(FRemoteMonitors)=0) or (FRemoteLayoutW<1) or (FRemoteLayoutH<1) then
   begin
     SetLength(Items,1); Items[0].RemoteIndex:=0;
     Items[0].SourceRect:=Rect(0,0,FFront.Surface.Width,FFront.Surface.Height);
     SrcW:=FFront.Surface.Width; SrcH:=FFront.Surface.Height;
-    Scale:=Min(1.0,Min(FView.Width/SrcW,FView.Height/SrcH));
+    Scale:=Min(1.0,Min(AView.Width/SrcW,AView.Height/SrcH));
     DestW:=Max(1,Round(SrcW*Scale)); DestH:=Max(1,Round(SrcH*Scale));
-    Items[0].DestRect:=Rect((FView.Width-DestW) div 2,(FView.Height-DestH) div 2,
-      (FView.Width-DestW) div 2+DestW,(FView.Height-DestH) div 2+DestH);
+    Items[0].DestRect:=Rect((AView.Width-DestW) div 2,(AView.Height-DestH) div 2,
+      (AView.Width-DestW) div 2+DestW,(AView.Height-DestH) div 2+DestH);
     Exit(True);
   end;
-  N:=SelectedRemoteMonitorCount; if N<1 then Exit;
+  // Independent window: only its remote monitor, scaled to this window.
+  // The source surface stays shared; no additional decode or transport.
+  if RemoteOnly>=0 then
+  begin
+    if (RemoteOnly>=Length(FRemoteMonitors)) or
+       not FRemoteMonitorSelected[RemoteOnly] or
+       not FRemoteMonitorDetached[RemoteOnly] then Exit;
+    Src:=SourceForRemote(RemoteOnly);
+    SrcW:=Src.Right-Src.Left; SrcH:=Src.Bottom-Src.Top;
+    Scale:=Min(AView.Width/SrcW,AView.Height/SrcH);
+    DestW:=Max(1,Round(SrcW*Scale)); DestH:=Max(1,Round(SrcH*Scale));
+    SetLength(Items,1);
+    Items[0].RemoteIndex:=RemoteOnly;
+    Items[0].SourceRect:=Src;
+    Items[0].DestRect:=Rect((AView.Width-DestW) div 2,
+      (AView.Height-DestH) div 2,
+      (AView.Width-DestW) div 2+DestW,
+      (AView.Height-DestH) div 2+DestH);
+    Exit(True);
+  end;
+  N:=FusedRemoteMonitorCount; if N<1 then Exit;
   SetLength(Selected,N); N:=0;
   for I:=0 to High(FRemoteMonitorSelected) do
-    if FRemoteMonitorSelected[I] then begin Selected[N]:=I; Inc(N); end;
+    if FRemoteMonitorSelected[I] and not FRemoteMonitorDetached[I] then
+    begin Selected[N]:=I; Inc(N); end;
   SetLength(Items,N);
 
   // When there are enough local displays and the window spans them, map one
@@ -1367,7 +1773,7 @@ begin
     // top of the form. Direct screen -> client mapping keeps video out of those
     // covered pixels and makes the remote bottom edge visible.
     if not GetLocalSpanRect(LocalOrder,N,FFullScreenMode,LocalBounds) then Exit;
-    ViewOrigin:=FView.ClientToScreen(Point(0,0));
+    ViewOrigin:=AView.ClientToScreen(Point(0,0));
     for I:=0 to N-1 do
     begin
       Src:=SourceForRemote(Selected[I]);
@@ -1380,10 +1786,10 @@ begin
         RawSlot.Right:=Min(RawSlot.Right,LocalBounds.Right);
         RawSlot.Bottom:=Min(RawSlot.Bottom,LocalBounds.Bottom);
       end;
-      Slot.Left:=EnsureRange(RawSlot.Left-ViewOrigin.X,0,FView.Width);
-      Slot.Top:=EnsureRange(RawSlot.Top-ViewOrigin.Y,0,FView.Height);
-      Slot.Right:=EnsureRange(RawSlot.Right-ViewOrigin.X,0,FView.Width);
-      Slot.Bottom:=EnsureRange(RawSlot.Bottom-ViewOrigin.Y,0,FView.Height);
+      Slot.Left:=EnsureRange(RawSlot.Left-ViewOrigin.X,0,AView.Width);
+      Slot.Top:=EnsureRange(RawSlot.Top-ViewOrigin.Y,0,AView.Height);
+      Slot.Right:=EnsureRange(RawSlot.Right-ViewOrigin.X,0,AView.Width);
+      Slot.Bottom:=EnsureRange(RawSlot.Bottom-ViewOrigin.Y,0,AView.Height);
       if (Slot.Right<=Slot.Left) or (Slot.Bottom<=Slot.Top) then Exit;
       SrcW:=Src.Right-Src.Left; SrcH:=Src.Bottom-Src.Top;
       SlotW:=Max(1,Slot.Right-Slot.Left); SlotH:=Max(1,Slot.Bottom-Slot.Top);
@@ -1413,10 +1819,10 @@ begin
     end;
   end;
   SrcW:=Bounds.Right-Bounds.Left; SrcH:=Bounds.Bottom-Bounds.Top;
-  Scale:=Min(1.0,Min(FView.Width/SrcW,FView.Height/SrcH));
+  Scale:=Min(1.0,Min(AView.Width/SrcW,AView.Height/SrcH));
   DestW:=Max(1,Round(SrcW*Scale)); DestH:=Max(1,Round(SrcH*Scale));
-  Slot:=Rect((FView.Width-DestW) div 2,(FView.Height-DestH) div 2,
-    (FView.Width-DestW) div 2+DestW,(FView.Height-DestH) div 2+DestH);
+  Slot:=Rect((AView.Width-DestW) div 2,(AView.Height-DestH) div 2,
+    (AView.Width-DestW) div 2+DestW,(AView.Height-DestH) div 2+DestH);
   for I:=0 to N-1 do
   begin
     Src:=Items[I].SourceRect;
@@ -1428,12 +1834,12 @@ begin
   Result:=True;
 end;
 
-function TKvmViewForm.MapRemoteCursorToView(NX,NY: Word; out CX,CY: Integer;
+function TKvmViewForm.MapRemoteCursorToView(AView: TPaintBox; NX,NY: Word; out CX,CY: Integer;
   out Item: TKvmDisplayItem): Boolean;
 var Items: TKvmDisplayItems; I,SX,SY,SW,SH,DW,DH: Integer;
 begin
   Result:=False; CX:=0; CY:=0; FillChar(Item,SizeOf(Item),0);
-  if not BuildDisplayLayout(Items) then Exit;
+  if not BuildDisplayLayoutFor(AView,Items) then Exit;
   SX:=Integer((Int64(NX)*(FFront.Surface.Width-1)) div 65535);
   SY:=Integer((Int64(NY)*(FFront.Surface.Height-1)) div 65535);
   for I:=0 to High(Items) do
@@ -1515,6 +1921,9 @@ end;
 
 procedure TKvmViewForm.CloseSocket;
 begin
+  FreeDetachedWindows;
+  SetLength(FRemoteMonitorDetached,0);
+  FDeactivationPending:=False;
   StopClipboardWorker; // no native clipboard or send callbacks after this join
   // Best-effort release. The server also has disconnect/heartbeat cleanup.
   if FAuthorized and FControlGranted and (FSocket <> nil) then
@@ -1573,9 +1982,7 @@ var
   Frame: TWebSocketFrame;
   PortNum: Integer;
   TLSContext: TNetTlsContext;
-  ConnectOptions: THttpRequestExtendedOptions;
-  TargetURI: TUri;
-  ConnectError: RawUtf8;
+  TLSContextRef: PNetTlsContext;
   Capability: RawByteString;
 begin
   if FSocket <> nil then Exit;
@@ -1593,12 +2000,19 @@ begin
     SetStatus(rsViewerStatusTlsRequired);
     Exit;
   end;
+  // The legacy mORMot2 overload expects only a host, not a full ws(s) URL.
+  if (Pos('/', FHost.Text)>0) or (Pos('\', FHost.Text)>0) then
+  begin
+    SetStatus(rsViewerStatusInvalidWs);
+    Exit;
+  end;
   FAutoControlPending := FAutoControl;
   SetStatus(rsViewerStatusConnecting);
   FConnect.Enabled := False;
   SyncMainMenu;
-  // Reuse TLS options for the mORMot2 path that reports the HTTP
-  // error code (the previous overload discarded that diagnostic).
+  // The installed mORMot2 exposes the host/port WebSocketsConnect overload.
+  // Pass the TLS context only for WSS; it must stay alive during Connect().
+  TLSContextRef := nil;
   if FTls.Checked then
   begin
     if (FTlsCaFile<>'') and not FileExists(FTlsCaFile) then
@@ -1609,22 +2023,7 @@ begin
       Exit;
     end;
     PrepareClientTls(FTlsCaFile,TLSContext);
-  end;
-
-  // Same setup as before, but with diagnostics for
-  // failed negotiation (HTTP 400, 404, 429, TLS errors, etc.).
-  ConnectOptions.InitDefault;
-  ConnectOptions.Proxy := 'none';
-  ConnectOptions.CreateTimeoutMS := 10000;
-  if FTls.Checked then
-    ConnectOptions.TLS := TLSContext;
-  if not TargetURI.FromScheme(WS_SCHEME[FTls.Checked],
-      RawUtf8(FHost.Text), RawUtf8(FPort.Text), KVM_WS_PATH) then
-  begin
-    SetStatus(rsViewerStatusInvalidWs);
-    FConnect.Enabled := True;
-    SyncMainMenu;
-    Exit;
+    TLSContextRef := @TLSContext;
   end;
   try
     FDecoder:=TKvmVideoWorker.Create(FEnableH264,@DecodeReply);
@@ -1635,15 +2034,13 @@ begin
     else KvmClientLog('[client-video] Fallback to FCL JPEG worker (no GUI decoding)');
     Proto := TWebSocketProtocolChat.Create(KVM_SUBPROTOCOL, KVM_WS_PATH,
       @IncomingFrame);
-    // mORMot2 handles Proto destruction, including on failure.
-    ConnectError := '';
+    // mORMot2 handles Proto destruction, including on failure. The legacy
+    // overload does not return the detailed HTTP upgrade error message.
     FSocket := THttpClientWebSockets.WebSocketsConnect(
-      TargetURI, ConnectOptions, Proto, nil, '', '', @ConnectError);
+      RawUtf8(FHost.Text), RawUtf8(FPort.Text), Proto,
+      nil, '', KVM_WS_PATH, '', FTls.Checked, TLSContextRef);
     if FSocket = nil then
-    begin
-      if ConnectError = '' then ConnectError := 'no response from server';
-      raise Exception.Create('WebSocket failed: ' + string(ConnectError));
-    end;
+      raise Exception.Create('WebSocket connection failed (network, TLS or HTTP upgrade).');
 
     Frame.opcode := focText;
     Frame.content := [];
@@ -1731,11 +2128,11 @@ end;
 
 procedure TKvmViewForm.WindowDeactivated(Sender: TObject);
 begin
-  if GetCaptureControl = FView then SetCaptureControl(nil);
-  // The user moved to another application. Unstick remote keys/buttons.
-  if FAuthorized and FControlGranted then SendPacket('Z');
-  FKeyboardFocus := False;
-  ResetLocalInputs;
+  if FClosing then Exit;
+  // The next active form may be another monitor of *this* session.
+  // Defer the release to the polling timer, after Windows changes focus.
+  FDeactivationPending:=True;
+  FDeactivationTick:=GetTickCount64;
 end;
 
 procedure TKvmViewForm.RefreshClick(Sender: TObject);
@@ -1751,7 +2148,8 @@ begin
   FMouseButtons := 0; FWheelRemainder := 0; FLastShift := [];
   FPendingMouseMove := False; FLastMouseTick := 0;
   FMouseEchoNext := 0; FillChar(FMouseEchoes,SizeOf(FMouseEchoes),0);
-  if GetCaptureControl = FView then SetCaptureControl(nil); FKeyboardFocus := False;
+  ReleaseSessionCapture;
+  FKeyboardFocus := False;
 end;
 
 procedure TKvmViewForm.ApplyDesktopState(Available: Boolean; Reason: Byte; Epoch: Cardinal);
@@ -1780,7 +2178,7 @@ begin
     SetStatus(rsViewerStatusDesktopAvailable);
   end;
   SyncClipboardOptions;
-  FView.Invalidate;
+  InvalidateAllViews;
 end;
 
 procedure TKvmViewForm.TextClick(Sender: TObject);
@@ -1893,30 +2291,36 @@ begin
 end;
 
 procedure TKvmViewForm.SyncViewCursor;
+var I: Integer; C: TCursor;
 begin
+  C:=crDefault;
   {$IFDEF WINDOWS}
-  if FView=nil then Exit;
   if ControlAllowed and (FFront.CursorShape.Revision<>0) and
      (FWinPresenter<>nil) and
-     (FWinPresenter.CursorRevision=FFront.CursorShape.Revision) then
-  begin
-    // During normal control the local OS pointer is the immediate cursor. Its
-    // shape/hotspot is exactly the one selected by the remote application.
-    if InstallLocalNativeCursor(KVM_LOCAL_NATIVE_CURSOR,FFront.CursorShape) then
-      FView.Cursor:=KVM_LOCAL_NATIVE_CURSOR
-    else
-      FView.Cursor:=crDefault;
-  end
-  else
-    FView.Cursor:=crDefault;
+     (FWinPresenter.CursorRevision=FFront.CursorShape.Revision) and
+     InstallLocalNativeCursor(KVM_LOCAL_NATIVE_CURSOR,FFront.CursorShape) then
+    C:=KVM_LOCAL_NATIVE_CURSOR;
   {$ENDIF}
+  if FView<>nil then FView.Cursor:=C;
+  for I:=0 to High(FDetachedWindows) do
+    if FDetachedWindows[I]<>nil then FDetachedWindows[I].View.Cursor:=C;
 end;
 
 procedure TKvmViewForm.InvalidateCursor(X,Y: Word; AVisible: Boolean);
+var I: Integer;
+begin
+  InvalidateCursorInView(FView,X,Y,AVisible);
+  for I:=0 to High(FDetachedWindows) do
+    if FDetachedWindows[I]<>nil then
+      InvalidateCursorInView(FDetachedWindows[I].View,X,Y,AVisible);
+end;
+
+procedure TKvmViewForm.InvalidateCursorInView(AView: TPaintBox;
+  X,Y: Word; AVisible: Boolean);
 var Area: TRect; CX,CY,CW,CH,HX,HY,DW,DH,SW,SH: Integer; Item: TKvmDisplayItem;
 begin
-  if not AVisible or (FView.Parent=nil) then Exit;
-  if not MapRemoteCursorToView(X,Y,CX,CY,Item) then Exit;
+  if not AVisible or (AView=nil) or (AView.Parent=nil) then Exit;
+  if not MapRemoteCursorToView(AView,X,Y,CX,CY,Item) then Exit;
   DW:=Item.DestRect.Right-Item.DestRect.Left;
   DH:=Item.DestRect.Bottom-Item.DestRect.Top;
   SW:=Item.SourceRect.Right-Item.SourceRect.Left;
@@ -1929,23 +2333,33 @@ begin
     HX:=Integer((Int64(FFront.CursorShape.HotX)*DW+SW div 2) div SW);
     HY:=Integer((Int64(FFront.CursorShape.HotY)*DH+SH div 2) div SH);
     Area:=Rect(Max(0,CX-HX-2),Max(0,CY-HY-2),
-      Min(FView.Width,CX-HX+CW+2),Min(FView.Height,CY-HY+CH+2));
+      Min(AView.Width,CX-HX+CW+2),Min(AView.Height,CY-HY+CH+2));
   end
   else
   {$ENDIF}
     Area:=Rect(Max(0,CX-12),Max(0,CY-12),
-      Min(FView.Width,CX+13),Min(FView.Height,CY+13));
-  OffsetRect(Area,FView.Left,FView.Top);
-  LCLIntf.InvalidateRect(FView.Parent.Handle,@Area,False);
+      Min(AView.Width,CX+13),Min(AView.Height,CY+13));
+  OffsetRect(Area,AView.Left,AView.Top);
+  LCLIntf.InvalidateRect(AView.Parent.Handle,@Area,False);
 end;
 
 procedure TKvmViewForm.InvalidateDamage(const Damage: TRect);
+var I: Integer;
+begin
+  InvalidateDamageInView(FView,Damage);
+  for I:=0 to High(FDetachedWindows) do
+    if FDetachedWindows[I]<>nil then
+      InvalidateDamageInView(FDetachedWindows[I].View,Damage);
+end;
+
+procedure TKvmViewForm.InvalidateDamageInView(AView: TPaintBox;
+  const Damage: TRect);
 var Items: TKvmDisplayItems; I,DW,DH,SW,SH: Integer; Hit,Area: TRect;
 begin
-  if (FView.Parent=nil) or not SurfaceValid(FFront.Surface) then Exit;
+  if (AView=nil) or (AView.Parent=nil) or not SurfaceValid(FFront.Surface) then Exit;
   if (Damage.Right<=Damage.Left) or (Damage.Bottom<=Damage.Top) then
-  begin FView.Invalidate; Exit; end;
-  if not BuildDisplayLayout(Items) then begin FView.Invalidate; Exit; end;
+  begin AView.Invalidate; Exit; end;
+  if not BuildDisplayLayoutFor(AView,Items) then begin AView.Invalidate; Exit; end;
   for I:=0 to High(Items) do
   begin
     Hit.Left:=Max(Damage.Left,Items[I].SourceRect.Left);
@@ -1963,9 +2377,9 @@ begin
     Area.Right:=Items[I].DestRect.Left+Integer(((Int64(Hit.Right)-Int64(Items[I].SourceRect.Left))*DW+SW-1) div SW);
     Area.Bottom:=Items[I].DestRect.Top+Integer(((Int64(Hit.Bottom)-Int64(Items[I].SourceRect.Top))*DH+SH-1) div SH);
     Area.Left:=Max(0,Area.Left-1); Area.Top:=Max(0,Area.Top-1);
-    Area.Right:=Min(FView.Width,Area.Right+1); Area.Bottom:=Min(FView.Height,Area.Bottom+1);
-    OffsetRect(Area,FView.Left,FView.Top);
-    LCLIntf.InvalidateRect(FView.Parent.Handle,@Area,False);
+    Area.Right:=Min(AView.Width,Area.Right+1); Area.Bottom:=Min(AView.Height,Area.Bottom+1);
+    OffsetRect(Area,AView.Left,AView.Top);
+    LCLIntf.InvalidateRect(AView.Parent.Handle,@Area,False);
   end;
 end;
 
@@ -2065,7 +2479,7 @@ begin
     FBitmap.LoadFromRawImage(Raw,False);
   end;
   Inc(FRawImportMs,GetTickCount64-Tick);
-  if GeometryChanged then FView.Invalidate else InvalidateDamage(Damage);
+  if GeometryChanged then InvalidateAllViews else InvalidateDamage(Damage);
   if CursorChanged and NewOverlayVisible then
     InvalidateCursor(FCursorX,FCursorY,True);
 end;
@@ -2086,6 +2500,12 @@ begin
   if FPolling or FClosing then Exit;
   FPolling:=True;
   try
+    if FDeactivationPending then
+    begin
+      if SessionWindowActive then FDeactivationPending:=False
+      else if GetTickCount64-FDeactivationTick>=KVM_FOCUS_GRACE_MS then
+        ReleaseInputsOnFocusLoss;
+    end;
     if FTransportFault then
     begin
       CloseSocket; SetStatus(rsViewerStatusSendInterrupted); Exit;
@@ -2275,11 +2695,11 @@ begin
   finally FPolling:=False; end;
 end;
 
-function TKvmViewForm.GetVideoRect: TRect;
+function TKvmViewForm.GetVideoRect(AView: TPaintBox): TRect;
 var Items: TKvmDisplayItems; I: Integer;
 begin
   Result:=Rect(0,0,0,0);
-  if not BuildDisplayLayout(Items) or (Length(Items)=0) then Exit;
+  if not BuildDisplayLayoutFor(AView,Items) or (Length(Items)=0) then Exit;
   Result:=Items[0].DestRect;
   for I:=1 to High(Items) do
   begin
@@ -2295,16 +2715,28 @@ var
   Items: TKvmDisplayItems; Item: TKvmDisplayItem; I,CX,CY: Integer;
   HalfSize,CursorW,CursorH,VideoW,VideoH,SourceW,SourceH: Integer;
   PaintTick: QWord;
+  AView: TPaintBox;
 begin
-  FView.Canvas.Brush.Color:=clBlack;
-  FView.Canvas.FillRect(FView.ClientRect);
+  if not (Sender is TPaintBox) then Exit;
+  AView:=TPaintBox(Sender);
+  AView.Canvas.Brush.Color:=clBlack;
+  AView.Canvas.FillRect(AView.ClientRect);
   if (FFront.Surface.Width<1) or (FFront.Surface.Height<1) then
   begin
-    FView.Canvas.Font.Color:=clWhite;
-    FView.Canvas.TextOut(20,20,rsViewerViewWaiting);
+    AView.Canvas.Font.Color:=clWhite;
+    AView.Canvas.TextOut(20,20,rsViewerViewWaiting);
     Exit;
   end;
-  if not BuildDisplayLayout(Items) then Exit;
+  if not BuildDisplayLayoutFor(AView,Items) then
+  begin
+    if (AView=FView) and (FusedRemoteMonitorCount=0) and
+       (SelectedRemoteMonitorCount>0) then
+    begin
+      AView.Canvas.Font.Color:=clWhite;
+      AView.Canvas.TextOut(20,20,rsViewerViewAllDetached);
+    end;
+    Exit;
+  end;
   PaintTick:=GetTickCount64;
   for I:=0 to High(Items) do
   begin
@@ -2312,7 +2744,7 @@ begin
     {$IFDEF WINDOWS}
     if FUseRawImage then
     begin
-      if (FWinPresenter=nil) or not FWinPresenter.PaintRegion(FView.Canvas.Handle,
+      if (FWinPresenter=nil) or not FWinPresenter.PaintRegion(AView.Canvas.Handle,
         Item.DestRect.Left,Item.DestRect.Top,
         Item.DestRect.Right-Item.DestRect.Left,Item.DestRect.Bottom-Item.DestRect.Top,
         Item.SourceRect.Left,Item.SourceRect.Top,
@@ -2321,11 +2753,11 @@ begin
     end
     else
     {$ENDIF}
-      FView.Canvas.CopyRect(Item.DestRect,FBitmap.Canvas,Item.SourceRect);
+      AView.Canvas.CopyRect(Item.DestRect,FBitmap.Canvas,Item.SourceRect);
   end;
   Inc(FPaintMs,GetTickCount64-PaintTick); Inc(FPaintCount);
   if not FCursorVisible or not FRemoteCursorOverlay then Exit;
-  if not MapRemoteCursorToView(FCursorX,FCursorY,CX,CY,Item) then Exit;
+  if not MapRemoteCursorToView(AView,FCursorX,FCursorY,CX,CY,Item) then Exit;
   {$IFDEF WINDOWS}
   if (FWinPresenter<>nil) and (FFront.CursorShape.Revision<>0) then
   begin
@@ -2335,29 +2767,29 @@ begin
     SourceH:=Item.SourceRect.Bottom-Item.SourceRect.Top;
     CursorW:=Max(1,Integer((Int64(FFront.CursorShape.Width)*VideoW+SourceW div 2) div SourceW));
     CursorH:=Max(1,Integer((Int64(FFront.CursorShape.Height)*VideoH+SourceH div 2) div SourceH));
-    if FWinPresenter.PaintCursor(FView.Canvas.Handle,CX,CY,CursorW,CursorH) then Exit;
+    if FWinPresenter.PaintCursor(AView.Canvas.Handle,CX,CY,CursorW,CursorH) then Exit;
   end;
   {$ENDIF}
   HalfSize:=9;
-  FView.Canvas.Pen.Style:=psSolid; FView.Canvas.Pen.Color:=clBlack; FView.Canvas.Pen.Width:=3;
-  FView.Canvas.MoveTo(Max(Item.DestRect.Left,CX-HalfSize),CY);
-  FView.Canvas.LineTo(Min(Item.DestRect.Right-1,CX+HalfSize+1),CY);
-  FView.Canvas.MoveTo(CX,Max(Item.DestRect.Top,CY-HalfSize));
-  FView.Canvas.LineTo(CX,Min(Item.DestRect.Bottom-1,CY+HalfSize+1));
-  FView.Canvas.Pen.Color:=clYellow; FView.Canvas.Pen.Width:=1;
-  FView.Canvas.MoveTo(Max(Item.DestRect.Left,CX-HalfSize),CY);
-  FView.Canvas.LineTo(Min(Item.DestRect.Right-1,CX+HalfSize+1),CY);
-  FView.Canvas.MoveTo(CX,Max(Item.DestRect.Top,CY-HalfSize));
-  FView.Canvas.LineTo(CX,Min(Item.DestRect.Bottom-1,CY+HalfSize+1));
+  AView.Canvas.Pen.Style:=psSolid; AView.Canvas.Pen.Color:=clBlack; AView.Canvas.Pen.Width:=3;
+  AView.Canvas.MoveTo(Max(Item.DestRect.Left,CX-HalfSize),CY);
+  AView.Canvas.LineTo(Min(Item.DestRect.Right-1,CX+HalfSize+1),CY);
+  AView.Canvas.MoveTo(CX,Max(Item.DestRect.Top,CY-HalfSize));
+  AView.Canvas.LineTo(CX,Min(Item.DestRect.Bottom-1,CY+HalfSize+1));
+  AView.Canvas.Pen.Color:=clYellow; AView.Canvas.Pen.Width:=1;
+  AView.Canvas.MoveTo(Max(Item.DestRect.Left,CX-HalfSize),CY);
+  AView.Canvas.LineTo(Min(Item.DestRect.Right-1,CX+HalfSize+1),CY);
+  AView.Canvas.MoveTo(CX,Max(Item.DestRect.Top,CY-HalfSize));
+  AView.Canvas.LineTo(CX,Min(Item.DestRect.Bottom-1,CY+HalfSize+1));
 end;
 
-function TKvmViewForm.ToNormalized(X,Y: Integer; out NX,NY: Word): Boolean;
+function TKvmViewForm.ToNormalized(AView: TPaintBox; X,Y: Integer; out NX,NY: Word): Boolean;
 var
   Items: TKvmDisplayItems; I,Best,PX,PY,DX,DY,SrcX,SrcY,SW,SH,DW,DH: Integer;
   Dist,BestDist: Int64;
 begin
   Result:=False; NX:=0; NY:=0;
-  if not BuildDisplayLayout(Items) then Exit;
+  if not BuildDisplayLayoutFor(AView,Items) then Exit;
   Best:=-1; PX:=X; PY:=Y;
   for I:=0 to High(Items) do
     if (X>=Items[I].DestRect.Left) and (X<Items[I].DestRect.Right) and
@@ -2513,8 +2945,12 @@ procedure TKvmViewForm.ViewMouseMove(Sender: TObject; Shift: TShiftState;
 var
   NX, NY: Word;
   NowTicks: QWord;
+  AView: TPaintBox;
 begin
-  if not ControlAllowed or not ToNormalized(X, Y, NX, NY) then Exit;
+  if not (Sender is TPaintBox) then Exit;
+  AView:=TPaintBox(Sender);
+  ResolveDragView(AView,X,Y);
+  if not ControlAllowed or not ToNormalized(AView, X, Y, NX, NY) then Exit;
   HideRemoteCursorOverlay;
   // Keep the most recent position rather than dropping movements entirely.
   FPendingMouseX := NX; FPendingMouseY := NY;
@@ -2531,17 +2967,22 @@ procedure TKvmViewForm.ViewMouseDown(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
 var
   NX, NY: Word;
+  AView: TPaintBox;
 begin
-  if not ControlAllowed or not ToNormalized(X, Y, NX, NY) then Exit;
+  if not (Sender is TPaintBox) then Exit;
+  AView:=TPaintBox(Sender);
+  if not ControlAllowed or not ToNormalized(AView, X, Y, NX, NY) then Exit;
   HideRemoteCursorOverlay;
   if MouseButtonCode(Button) = 0 then Exit;
   FMouseButtons := FMouseButtons or (1 shl (MouseButtonCode(Button)-1));
   FKeyboardFocus := True;
-  SetCaptureControl(FView);
+  SetCaptureControl(AView);
   // The button packet contains the exact position; discard an old move.
   FPendingMouseMove := False;
   // Remove focus from login edits; keyboard events go to the form.
-  ActiveControl := nil;
+  if AView=FView then ActiveControl:=nil
+  else if AView.Parent is TCustomForm then
+    TCustomForm(AView.Parent).ActiveControl:=nil;
   SendPacket(MakeMouse(1, MouseButtonCode(Button), NX, NY));
 end;
 
@@ -2550,24 +2991,27 @@ procedure TKvmViewForm.ViewMouseUp(Sender: TObject; Button: TMouseButton;
 var
   NX, NY: Word;
   R: TRect;
+  AView: TPaintBox;
 begin
+  if not (Sender is TPaintBox) then Exit;
+  AView:=TPaintBox(Sender);
+  ResolveDragView(AView,X,Y);
   if not ControlAllowed then Exit;
-  if not ToNormalized(X, Y, NX, NY) then
+  if not ToNormalized(AView, X, Y, NX, NY) then
   begin
     // Release the remote button even if the cursor left the image.
-    R := GetVideoRect;
+    R := GetVideoRect(AView);
     if (R.Right <= R.Left + 1) or (R.Bottom <= R.Top + 1) then Exit;
     X := EnsureRange(X, R.Left, R.Right - 1);
     Y := EnsureRange(Y, R.Top, R.Bottom - 1);
-    if not ToNormalized(X, Y, NX, NY) then Exit;
+    if not ToNormalized(AView, X, Y, NX, NY) then Exit;
   end;
   HideRemoteCursorOverlay;
   if MouseButtonCode(Button) = 0 then Exit;
   FPendingMouseMove := False;
   SendPacket(MakeMouse(2, MouseButtonCode(Button), NX, NY));
   FMouseButtons := FMouseButtons and not (1 shl (MouseButtonCode(Button)-1));
-  if FMouseButtons <> 0 then SetCaptureControl(FView)
-  else if GetCaptureControl = FView then SetCaptureControl(nil);
+  if FMouseButtons=0 then ReleaseSessionCapture;
 end;
 
 procedure TKvmViewForm.ViewMouseWheel(Sender: TObject; Shift: TShiftState;
@@ -2618,8 +3062,8 @@ var
 begin
   if not ControlAllowed or not FKeyboardFocus then Exit;
   if FRemoteKeys.Checked then begin UTF8Key:=''; Exit; end;
-  if (ActiveControl = FHost) or (ActiveControl = FPort) or
-     (ActiveControl = FToken) then Exit;
+  if (Sender=Self) and ((ActiveControl=FHost) or
+     (ActiveControl=FPort) or (ActiveControl=FToken)) then Exit;
   // Shortcuts remain virtual-key events. Windows AltGr is the physical
   // right Alt key, not an arbitrary Ctrl+Alt combination.
   if KvmIsTextShortcut(FLastShift) then Exit;
@@ -2642,6 +3086,12 @@ begin
   // F11 is reserved by the CLIENT for full screen; other function keys go to the remote host.
   if Key = VK_F11 then
   begin
+    if Sender is TKvmDetachedMonitorForm then
+    begin
+      TKvmDetachedMonitorForm(Sender).ToggleFullScreen;
+      Key:=0;
+      Exit;
+    end;
     if not FEmbeddedMode then
     begin
       ToggleFullScreen;
@@ -2651,8 +3101,8 @@ begin
   end;
   FLastShift := Shift;
   if not ControlAllowed or not FKeyboardFocus then Exit;
-  if (ActiveControl = FHost) or (ActiveControl = FPort) or
-     (ActiveControl = FToken) then Exit;
+  if (Sender=Self) and ((ActiveControl=FHost) or
+     (ActiveControl=FPort) or (ActiveControl=FToken)) then Exit;
   if (Key=0) or (Key>255) then Exit;
   Shortcut := KvmIsTextShortcut(Shift);
   if not FRemoteKeys.Checked and IsPrintableVirtualKey(Key) and not Shortcut then
@@ -2684,7 +3134,7 @@ procedure TKvmViewForm.RemoteKeyUp(Sender: TObject;
 begin
   if Key = VK_F11 then
   begin
-    if not FEmbeddedMode then
+    if (Sender is TKvmDetachedMonitorForm) or not FEmbeddedMode then
     begin
       Key := 0;
       Exit;
@@ -2692,8 +3142,8 @@ begin
   end;
   FLastShift := Shift;
   if not ControlAllowed or not FKeyboardFocus then Exit;
-  if (ActiveControl = FHost) or (ActiveControl = FPort) or
-     (ActiveControl = FToken) then Exit;
+  if (Sender=Self) and ((ActiveControl=FHost) or
+     (ActiveControl=FPort) or (ActiveControl=FToken)) then Exit;
   if (Key=0) or (Key>255) then Exit;
   {$IFDEF WINDOWS}
   // Some Windows widgetsets report a generic VK_MENU key-down but a

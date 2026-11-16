@@ -233,6 +233,11 @@ msgstr "No remote monitors"
 msgid "All monitors"
 msgstr "All monitors"
 
+#. Viewer: monitor.fusion
+#: kvm_viewer_i18n.rsviewermenufusion
+msgid "Fusion"
+msgstr "Fusion"
+
 #. Viewer: monitor.item
 #: kvm_viewer_i18n.rsviewermonitoritem
 msgid "Monitor %d  -  %dx%d"
@@ -522,6 +527,11 @@ msgstr "Automatic mode: locally composed Unicode text; shortcuts and special key
 #: kvm_viewer_i18n.rsviewerviewwaiting
 msgid "Waiting for remote desktop..."
 msgstr "Waiting for remote desktop..."
+
+#. Viewer: view.all_detached
+#: kvm_viewer_i18n.rsviewerviewalldetached
+msgid "All monitors are detached. Close a monitor window to merge it again."
+msgstr "All monitors are detached. Close a monitor window to merge it again."
 
 #. Viewer: session.active
 #: kvm_viewer_i18n.rsviewersessionactive

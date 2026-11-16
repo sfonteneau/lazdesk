@@ -58,7 +58,7 @@ def placeholders(value):
 
 def test_native_resourcestrings_are_complete_and_referenced():
     resources = original_resources()
-    assert len(resources) == 111
+    assert len(resources) == 113
     assert 'resourcestring' in I18N
     assert '{$codepage utf8}' in I18N
     assert 'function TKvmViewForm.Tr(' not in VIEW

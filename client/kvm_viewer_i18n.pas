@@ -56,6 +56,7 @@ resourcestring
   rsViewerWindowFullscreen = 'F11 full screen';
   rsViewerMonitorNone = 'No remote monitors';
   rsViewerMonitorAll = 'All monitors';
+  rsViewerMenuFusion = 'Fusion';
   rsViewerMonitorItem = 'Monitor %d  -  %dx%d';
   rsViewerDialogConnectionSettings = 'Connection settings';
   rsViewerDialogToken = 'Token';
@@ -114,6 +115,7 @@ resourcestring
   rsViewerStatusKeyboardPhysical = 'Physical keys: the remote desktop keyboard layout and input methods apply.';
   rsViewerStatusKeyboardAuto = 'Automatic mode: locally composed Unicode text; shortcuts and special keys sent separately.';
   rsViewerViewWaiting = 'Waiting for remote desktop...';
+  rsViewerViewAllDetached = 'All monitors are detached. Close a monitor window to merge it again.';
   rsViewerSessionActive = 'Session active';
   rsViewerSessionLocked = 'Session locked';
   rsViewerSessionInactive = 'Session inactive/disconnected';

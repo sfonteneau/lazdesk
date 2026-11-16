@@ -12,8 +12,8 @@ assert constants == {"KVM_WS_PATH": "/kvm", "KVM_WS_ROUTE": "kvm"}, constants
 assert constants["KVM_WS_PATH"].lstrip("/") == constants["KVM_WS_ROUTE"]
 assert "KVM_WS_ROUTE, @HandleFrame" in server
 assert "Protocol.UpgradeUri <> KVM_WS_ROUTE" in server
-assert 'TargetURI, ConnectOptions, Proto' in client and '@ConnectError' in client
-assert 'KVM_WS_PATH) then' in client
+assert 'RawUtf8(FHost.Text), RawUtf8(FPort.Text), Proto,' in client
+assert "nil, '', KVM_WS_PATH, '', FTls.Checked, TLSContextRef" in client
 assert 'FStatus.Caption := TextA;' in client
 assert 'mormot.net.client' in client
 assert "Frame.payload := 'AUTH ' + RawByteString(AnsiString(FToken.Text))+' '+Capability;" in client

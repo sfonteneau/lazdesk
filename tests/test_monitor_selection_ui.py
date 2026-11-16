@@ -16,7 +16,7 @@ assert 'WantSpan:=(SelectedCount>1)' in form
 assert 'WorkareaRect' in form
 assert 'LocalMonitorWorkRect' in form
 assert 'KvmSafeMonitorWorkRect' in form
-assert 'FView.ClientToScreen(Point(0,0))' in form
+assert 'AView.ClientToScreen(Point(0,0))' in form
 assert "Shell_TrayWnd" in present
 assert "Shell_SecondaryTrayWnd" in present
 assert 'function TKvmViewForm.GetLocalSpanRect' in form
@@ -31,4 +31,4 @@ assert 'MapRemoteCursorToView' in form
 assert 'PaintRegion' in present
 assert 'CaptureMonitorLayoutText' in monitors
 assert 'SendText(ID,CaptureMonitorLayoutText)' in server
-print('PASS: checkable monitor submenu/topology/no-upscale source guards')
+print('PASS: checkable monitor submenu/topology/no-upscale merged source guards')

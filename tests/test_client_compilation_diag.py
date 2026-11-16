@@ -11,11 +11,13 @@ assert 'FStatus.Caption := TextA;' in c
 assert 'FStatus.Caption := Text;' not in c
 assert 'Visible1,Available,StateChanged: Boolean;' in w
 assert 'ReadCursor(Packet,CX,CY,Visible1)' in w
-assert 'SetCaptureControl(FView)' in c
-assert 'THttpRequestExtendedOptions' in c
-assert 'TargetURI.FromScheme(WS_SCHEME[FTls.Checked]' in c
-assert 'TargetURI, ConnectOptions, Proto' in c and '@ConnectError' in c
+assert 'SetCaptureControl(AView)' in c
+assert 'THttpClientWebSockets.WebSocketsConnect(' in c
+assert 'RawUtf8(FHost.Text), RawUtf8(FPort.Text), Proto,' in c
+assert "nil, '', KVM_WS_PATH, '', FTls.Checked, TLSContextRef" in c
+assert 'TLSContextRef := @TLSContext' in c
+assert 'TargetURI, ConnectOptions, Proto' not in c
 assert 'AUTH ' in c and "' '+Capability" in c
 assert "KVM_WS_ROUTE = 'kvm';" in ws
 assert 'Protocol.UpgradeUri <> KVM_WS_ROUTE' in s
-print('PASS: user client v9 + WebSocket diagnostics + internal route handling')
+print('PASS: user client v9 + legacy mORMot2 overload + internal route handling')

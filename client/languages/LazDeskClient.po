@@ -233,6 +233,11 @@ msgstr ""
 msgid "All monitors"
 msgstr ""
 
+#. Viewer: monitor.fusion
+#: kvm_viewer_i18n.rsviewermenufusion
+msgid "Fusion"
+msgstr ""
+
 #. Viewer: monitor.item
 #: kvm_viewer_i18n.rsviewermonitoritem
 msgid "Monitor %d  -  %dx%d"
@@ -521,6 +526,11 @@ msgstr ""
 #. Viewer: view.waiting
 #: kvm_viewer_i18n.rsviewerviewwaiting
 msgid "Waiting for remote desktop..."
+msgstr ""
+
+#. Viewer: view.all_detached
+#: kvm_viewer_i18n.rsviewerviewalldetached
+msgid "All monitors are detached. Close a monitor window to merge it again."
 msgstr ""
 
 #. Viewer: session.active

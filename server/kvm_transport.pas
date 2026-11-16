@@ -71,9 +71,9 @@ begin
       if (P^.State = wpsRun) and (P^.Protocol.ConnectionID = ID) then
       begin
         Q := P^.Outgoing;
-        // SendPending holds this lock during socket writes. A temporary lock
-        // collision is backpressure, not a video protocol failure.
-        if not Q.Safe.TryLock then Exit(kqrBusy);
+        // Q.Safe is a PSynLocker in mORMot2 versions based on TSynLocked.
+        // Dereference it explicitly to retain nonblocking backpressure.
+        if not Q.Safe^.TryLock then Exit(kqrBusy);
         try
           N := Q.Count;
           if (N < 0) or (N > Length(Q.List)) then Exit(kqrInvalid);
@@ -101,7 +101,7 @@ begin
           end;
           Q.Count := N + Length(Frames);
           Result := kqrQueued;
-        finally Q.Safe.UnLock; end;
+        finally Q.Safe^.UnLock; end;
         Exit;
       end;
       Inc(P);
