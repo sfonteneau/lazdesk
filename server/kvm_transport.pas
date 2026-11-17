@@ -73,7 +73,7 @@ begin
         Q := P^.Outgoing;
         // Q.Safe is a PSynLocker in mORMot2 versions based on TSynLocked.
         // Dereference it explicitly to retain nonblocking backpressure.
-        if not Q.Safe^.TryLock then Exit(kqrBusy);
+        if not Q.Safe.TryLock then Exit(kqrBusy);
         try
           N := Q.Count;
           if (N < 0) or (N > Length(Q.List)) then Exit(kqrInvalid);
@@ -101,7 +101,7 @@ begin
           end;
           Q.Count := N + Length(Frames);
           Result := kqrQueued;
-        finally Q.Safe^.UnLock; end;
+        finally Q.Safe.UnLock; end;
         Exit;
       end;
       Inc(P);
