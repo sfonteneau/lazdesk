@@ -2,29 +2,48 @@
 <CONFIG>
   <Package Version="5">
     <Name Value="LazDeskEmbedded"/>
-    <Type Value="RunTime"/>
-    <Version Major="1" Minor="0"/>
     <Author Value="LazDesk"/>
+    <CompilerOptions>
+      <Version Value="11"/>
+      <SearchPaths>
+        <OtherUnitFiles Value="../server;../shared"/>
+        <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
+      </SearchPaths>
+      <CodeGeneration>
+        <SmartLinkUnit Value="True"/>
+        <Optimizations>
+          <OptimizationLevel Value="3"/>
+        </Optimizations>
+      </CodeGeneration>
+      <Linking>
+        <Debugging>
+          <DebugInfoType Value="dsDwarf3"/>
+        </Debugging>
+      </Linking>
+    </CompilerOptions>
     <Description Value="LazDesk in-process KVM server (WebSocket or mORMot2 OpenDirect)"/>
     <License Value="Refer to project README and dependencies"/>
-    <RequiredPkgs>
-      <Item1><PackageName Value="mormot2"/></Item1>
-    </RequiredPkgs>
-    <Files Count="1">
-      <Item1>
+    <Version Major="1"/>
+    <Files>
+      <Item>
         <Filename Value="../server/kvm_embedded.pas"/>
         <UnitName Value="kvm_embedded"/>
-      </Item1>
+      </Item>
     </Files>
+    <RequiredPkgs>
+      <Item>
+        <PackageName Value="LazDeskViewer"/>
+      </Item>
+      <Item>
+        <PackageName Value="mormot2"/>
+      </Item>
+    </RequiredPkgs>
+    <UsageOptions>
+      <IncludePath Value="$(PkgIncPath)"/>
+      <UnitPath Value="$(PkgOutDir)"/>
+    </UsageOptions>
+    <PublishOptions>
+      <Version Value="2"/>
+    </PublishOptions>
   </Package>
-  <CompilerOptions>
-    <Version Value="11"/>
-    <SearchPaths>
-      <OtherUnitFiles Value="../server;../shared"/>
-      <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
-    </SearchPaths>
-    <CodeGeneration>
-      <Optimizations><OptimizationLevel Value="2"/></Optimizations>
-    </CodeGeneration>
-  </CompilerOptions>
 </CONFIG>

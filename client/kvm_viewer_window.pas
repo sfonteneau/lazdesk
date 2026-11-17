@@ -18,7 +18,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     procedure Configure(const Options: TKvmClientOptions);
-    procedure TakeControl(Enabled: Boolean);
+    procedure TakeControl(aEnabled: Boolean);
     // Called when the user closes this viewer window, BEFORE it is freed.
     // The host can clear its stored reference here; it must not free Sender.
     property OnWindowClosed: TNotifyEvent read FOnWindowClosed write FOnWindowClosed;
@@ -83,9 +83,9 @@ begin
   ApplyOptions(Local);
 end;
 
-procedure TKvmViewerWindow.TakeControl(Enabled: Boolean);
+procedure TKvmViewerWindow.TakeControl(aEnabled: Boolean);
 begin
-  RequestControl(Enabled);
+  RequestControl(aEnabled);
 end;
 
 function OpenLazDeskViewerWindow(AOwner: TComponent;

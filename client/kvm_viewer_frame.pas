@@ -28,7 +28,7 @@ type
     procedure Configure(const Options: TKvmClientOptions);
     procedure Connect;
     procedure Disconnect;
-    procedure TakeControl(Enabled: Boolean);
+    procedure TakeControl(aEnabled: Boolean);
     procedure RefreshDesktop;
     procedure ReleaseLocalInputs;
     procedure SetLanguage(const Code: string);
@@ -113,9 +113,9 @@ begin
   FViewer.Disconnect;
 end;
 
-procedure TKvmViewerFrame.TakeControl(Enabled: Boolean);
+procedure TKvmViewerFrame.TakeControl(aEnabled: Boolean);
 begin
-  FViewer.RequestControl(Enabled);
+  FViewer.RequestControl(aEnabled);
 end;
 
 procedure TKvmViewerFrame.RefreshDesktop;
