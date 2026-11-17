@@ -19,7 +19,7 @@ type
   private
     FLock, FSendLock: TRTLCriticalSection;
     FTunnel: TTunnelLocal; // owned by the host, never by this class
-    FClosed: Boolean;
+    FTunnelClosed: Boolean;
     FOnMessage: TKvmDirectMessageEvent;
     FOnInvalid: TKvmDirectErrorEvent;
   public
@@ -64,7 +64,7 @@ begin
     FTunnel := Tunnel;
     FOnMessage := OnMessage;
     FOnInvalid := OnInvalid;
-    FClosed := False;
+    FTunnelClosed := False;
   finally LeaveCriticalSection(FLock); end;
 end;
 
@@ -74,7 +74,7 @@ begin
   // engine is being destroyed by its host application.
   EnterCriticalSection(FLock);
   try
-    FClosed := True;
+    FTunnelClosed := True;
     FOnMessage := nil;
     FOnInvalid := nil;
   finally LeaveCriticalSection(FLock); end;
@@ -113,14 +113,14 @@ var
 begin
   EnterCriticalSection(FLock);
   try
-    if FClosed then Exit;
+    if FTunnelClosed then Exit;
     if KvmDirectUnpack(Frame,Kind,Payload) then
     begin
       if Assigned(FOnMessage) then FOnMessage(Kind,Payload);
     end
     else
     begin
-      FClosed := True;
+      FTunnelClosed := True;
       if Assigned(FOnInvalid) then FOnInvalid;
     end;
   finally LeaveCriticalSection(FLock); end;
